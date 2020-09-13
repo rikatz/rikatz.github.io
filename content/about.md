@@ -1,25 +1,19 @@
 +++
 title = "About"
-description = "Hugo, the world's fastest framework for building websites"
-date = "2019-02-28"
-aliases = ["about-us", "about-hugo", "contact"]
-author = "Hugo Authors"
+description = "whoami"
+date = "2020-09-13"
+aliases = ["about", "contact"]
+author = "Ricardo P. Katz"
 +++
 
-Written in Go, Hugo is an open source static site generator available under the [Apache Licence 2.0.](https://github.com/gohugoio/hugo/blob/master/LICENSE) Hugo supports TOML, YAML and JSON data file types, Markdown and HTML content files and uses shortcodes to add rich content. Other notable features are taxonomies, multilingual mode, image processing, custom output formats, HTML/CSS/JS minification and support for Sass SCSS workflows.
+Hello :) My name is Ricardo, I live in Sao Paulo since I was born in 1986. I do enjoy Lego, Airplanes (well, if I weren't here in IT my dream was to be a pilot) and Kubernetes Stuff.
 
-Hugo makes use of a variety of open source projects including:
+I work with Linux Administration (back when this wasn't called SRE) since 2007, with some background also in security.
 
-* https://github.com/yuin/goldmark
-* https://github.com/alecthomas/chroma
-* https://github.com/muesli/smartcrop
-* https://github.com/spf13/cobra
-* https://github.com/spf13/viper
+I'm the author of [kubepug](github.com/rikatz/kubepug) and you might see some bad bad coding practices, as this is my attempt to learn better Go coding :D
 
-Hugo is ideal for blogs, corporate websites, creative portfolios, online magazines, single page applications or even a website with thousands of pages.
+You will see me around there trying to learn new stuffs always, and writing some experiences here. If you want to reach out and provide me some feedback, or ask something from anything I wrote here please please please! Feel free to direct message me.
 
-Hugo is for people who want to hand code their own website without worrying about setting up complicated runtimes, dependencies and databases.
+My twitter and Linkedin are here, I'm also around Kubernetes Slack as @rpkatz.
 
-Websites built with Hugo are extremelly fast, secure and can be deployed anywhere including, AWS, GitHub Pages, Heroku, Netlify and any other hosting provider.
-
-Learn more and contribute on [GitHub](https://github.com/gohugoio).
+Hope you enjoy the content here :)
