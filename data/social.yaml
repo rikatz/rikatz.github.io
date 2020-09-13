@@ -1,0 +1,9 @@
+- item: "github"
+  url: "https://github.com/rikatz"
+- item: "twitter"
+  url: "https://twitter.com/rpkatz"
+- item: "linkedin"
+  url: "https://www.linkedin.com/in/katzricardo"
+- item: "rss"
+  url: "index.xml"
+  internal:  true
