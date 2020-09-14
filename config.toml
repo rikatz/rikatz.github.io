@@ -32,7 +32,7 @@ introDescription = "SRE, does Kubernetes Stuff around there. Lego and planes add
 # description = "" # set your site's description here. will be use for home page content meta tags (seo). Alternatively set this description in your homepage content file i.e content/_index.md. Whatever is set in the latter will take precedence
 
 # Google analytics Id
-#ga_analytics = "XXXXXXXXXX"
+ga_analytics = "UA-177903864-1"
 
 # limit the number of taxonomies links shown on the sidebar of each page by default.
 numberOfTagsShown = 14 # Applies for all other default & custom taxonomies. e.g categories, brands see https://gohugo.io/content-management/taxonomies#what-is-a-taxonomy
