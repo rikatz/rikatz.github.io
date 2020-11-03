@@ -1,0 +1,11 @@
+[en]
+  title = "The Katz Experiments"
+  LanguageName = "English"
+  contentDir = "content/english"
+  weight = 1 
+
+[pt]
+  title = "The Katz Experiments" # just for the sake of showing this is possible
+  LanguageName = "Português"
+  contentDir = "content/portuguese"
+  weight = 2

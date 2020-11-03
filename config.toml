@@ -8,6 +8,13 @@ copyright = ""
 paginate = 10
 theme = "hugo-clarity"
 
+DefaultContentLanguage = "en"
+
+[taxonomies]
+category = "categories"
+tag = "tags"
+series = "series"
+
 [markup]
   [markup.highlight]
     codeFences = true
@@ -62,3 +69,8 @@ figurePositionLabel = "Figure" # the text before image number e.g Figure 1.0
 
 # Set the collapsed mobile navigation to either appear from the left or the right
 mobileNavigation = "left" # if you prefer right change to 'right'
+
+languageMenuName = "🌐"
+
+DefaultContentLanguage = "en"
+
