@@ -1,2 +1,96 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Automation on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/automation/</link><description>Recent content in Automation on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 13 Sep 2020 20:28:50 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/automation/index.xml" rel="self" type="application/rss+xml"/><item><title>Flatcar Linux in VMware Player — 5 minute command line deploy</title><link>https://www.rkatz.xyz/post/2020-09-13-flatcar/</link><pubDate>Sun, 13 Sep 2020 20:28:50 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-flatcar/</guid><description>So I needed to create a new Kubernetes Lab. Back in time, I’ve created a shell script to deploy a lot of CoreOS servers to my VMware Player, but I hadn’t touched that script since that time.
-With the deprecation of CoreOS and the glorious rise of Flatcar Linux to save us, and while needing to test some stuffs in Calico, it came to my mind ‘why not write how to quick deploy a Flatcar Linux VM in VMware Player without scripts?</description></item></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Automation on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/automation/</link><description>Recent content in Automation on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 13 Sep 2020 20:28:50 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/automation/index.xml" rel="self" type="application/rss+xml"/><item><title>Flatcar Linux in VMware Player — 5 minute command line deploy</title><link>https://www.rkatz.xyz/post/2020-09-13-flatcar/</link><pubDate>Sun, 13 Sep 2020 20:28:50 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-flatcar/</guid><description>
+&lt;p>So I needed to create a new Kubernetes Lab. Back in time, I’ve created a &lt;a href="https://github.com/rikatz/coreos-vmplayer-deployer">shell script&lt;/a> to deploy a lot of CoreOS servers to my VMware Player, but I hadn’t touched that script since that time.&lt;/p>
+&lt;p>With the deprecation of CoreOS and the glorious rise of Flatcar Linux to save us, and while needing to test some stuffs in Calico, it came to my mind ‘why not write how to quick deploy a Flatcar Linux VM in VMware Player without scripts?’. So here we go.&lt;/p>
+&lt;p>You will need:&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_vmware_ova.ova">The OVA of Flatcar Linux&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/flatcar-linux/container-linux-config-transpiler/releases">CoreOS Configuration Transpiler&lt;/a> (or you can write your &lt;a href="https://docs.flatcar-linux.org/ignition/what-is-ignition/">Ignition&lt;/a> file by your own, but really, not recommended). BTW you will need to compile Configuration Transpiler (sorry about that), but I think in a near future they will provide binaries. Anyway, it’s a simple and single Go program compilation&lt;/li>
+&lt;li>VMware player / ovftool and both are included in the VMware player installer&lt;/li>
+&lt;/ul>
+&lt;h2 id="writing-the-configuration-file">Writing the Configuration File&lt;/h2>
+&lt;p>So the first step is to generate a valid &lt;a href="https://docs.flatcar-linux.org/container-linux-config-transpiler/doc/examples/">Container Linux Configuration&lt;/a> containing at least a user with an SSH key and the hostname of the VM. You can configure the VM with whatever is supported by the Configuration.&lt;/p>
+&lt;p>Let’s create a file called &lt;code>config.yaml&lt;/code>&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">users&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">core&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">ssh_authorized_keys&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="l">ssh-rsa AAAAB3NzaC1y...... user@springfield&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="w">&lt;/span>&lt;span class="nt">storage&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">files&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">path&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">/etc/hostname&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">filesystem&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">root&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">mode&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0644&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">contents&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">inline&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">homer&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">user&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">id&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">15&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">group&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">16&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">id&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The above code will be used when bootstraping Flatcar Linux to create/change the user &lt;code>core&lt;/code> to allow SSH authentication with the following SSH Public Key, and also write a file called &lt;code>/etc/hostname&lt;/code> containing the hostname of the machine. This file will be used by Flatcar CL to configure its hostname.&lt;/p>
+&lt;p>Please be aware this is a YAML, you should not copy/paste to not be punished by some missing space/tab :D&lt;/p>
+&lt;p>You can now ‘transpile’ this configuration and transform it into a JSON that will be used by Ingition when the VM is booting for the first time.&lt;/p>
+&lt;p>Running the command &lt;code>ct --in-file config.yaml --pretty&lt;/code> it shall output a prettified version of an ignition file:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;ignition&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;config&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;security&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="nt">&amp;#34;tls&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="nt">&amp;#34;timeouts&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="nt">&amp;#34;version&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;2.2.0&amp;#34;&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="nt">&amp;#34;networkd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nt">&amp;#34;passwd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="nt">&amp;#34;users&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="nt">&amp;#34;name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;core&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">15&lt;/span> &lt;span class="nt">&amp;#34;sshAuthorizedKeys&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">16&lt;/span> &lt;span class="s2">&amp;#34;ssh-rsa AAAAB3NzaC1y...... user@springfield&amp;#34;&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">19&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">20&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">21&lt;/span> &lt;span class="nt">&amp;#34;storage&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">22&lt;/span> &lt;span class="nt">&amp;#34;files&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">23&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">24&lt;/span> &lt;span class="nt">&amp;#34;filesystem&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">25&lt;/span> &lt;span class="nt">&amp;#34;group&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">26&lt;/span> &lt;span class="nt">&amp;#34;id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>
+&lt;span class="ln">27&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">28&lt;/span> &lt;span class="nt">&amp;#34;user&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">29&lt;/span> &lt;span class="nt">&amp;#34;id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>
+&lt;span class="ln">30&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">31&lt;/span> &lt;span class="nt">&amp;#34;path&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;/etc/hostname&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">32&lt;/span> &lt;span class="nt">&amp;#34;contents&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">33&lt;/span> &lt;span class="nt">&amp;#34;source&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;data:,homer&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">34&lt;/span> &lt;span class="nt">&amp;#34;verification&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln">35&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">36&lt;/span> &lt;span class="nt">&amp;#34;mode&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">420&lt;/span>
+&lt;span class="ln">37&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">38&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">39&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">40&lt;/span> &lt;span class="nt">&amp;#34;systemd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln">41&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now you can grab this JSON and convert to base64 that will be read by Flatcar when booting. This does not need to be converted to base64, but the chance to have some bad character in the middle messing with your configuration will be reduced.&lt;/p>
+&lt;p>The full command is &lt;code>ct --in-file config.yaml --pretty |base64 -w0&lt;/code> but please BE AWARE that in MacOS/Darwin the base64 command does not have a -w0 flag, so you’ll need to sed/replace all the ending lines, turning the base64 into a full line without breaks, as the following:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
+&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="deploying-to-vmware-player">Deploying to VMware Player&lt;/h2>
+&lt;p>Well, assuming you’ve reached here with the correct base64 file created, containing the correct configuration for Flatcar Container Linux, now you just need to create the Virtual Machine using ovftool and it will be ready to be used.&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
+&lt;/span>&lt;span class="ln">2&lt;/span>&lt;span class="se">&lt;/span>--X:injectOvfEnv --name&lt;span class="o">=&lt;/span>flatcar --memorySize:&lt;span class="s1">&amp;#39;*&amp;#39;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">3072&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;span class="ln">3&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data.encoding&lt;span class="o">=&lt;/span>base64 &lt;span class="se">\
+&lt;/span>&lt;span class="ln">4&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data&lt;span class="o">=&lt;/span>THE_GENERATED_BASE_64 &lt;span class="se">\
+&lt;/span>&lt;span class="ln">5&lt;/span>&lt;span class="se">&lt;/span>--net:&lt;span class="s2">&amp;#34;VM Network&amp;#34;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;NAT&amp;#34;&lt;/span> flatcar.ova newdir
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Some points in this command:&lt;/p>
+&lt;ul>
+&lt;li>As said, you don’t need to use a base64 config but will need also to remove the flag &lt;code>--extraConfig:guestinfo.coreos.config.data.encoding&lt;/code>&lt;/li>
+&lt;li>You need to replace the value in &lt;code>guestinfo.coreos.config.data&lt;/code> to the base64 generated in the previous step&lt;/li>
+&lt;li>You can use whatever network from VMware Player you want, if you want a bridge instead of a Nat just replace to &lt;code>--net:&amp;quot;VM Network&amp;quot;=&amp;quot;Bridge&amp;quot;&lt;/code>&lt;/li>
+&lt;li>If the newdir in the end of the command already exists it will just put the vmx from the machine inside that directory&lt;/li>
+&lt;li>The &lt;code>guestinfo.coreos.config.data&lt;/code> and &lt;code>guestinfo.coreos.config.data.encoding&lt;/code> are deprecated in favor of guestinfo.ignition.config.* but today this new key only works in Flatcar Alpha release.&lt;/li>
+&lt;li>ovftool cannot change the memory size. So even you&amp;rsquo;ve created your machine with the parameter &lt;code>--memorySize:&lt;/code> you&amp;rsquo;ll have to manually change the amount of memory directly in the generated vmx file&lt;/li>
+&lt;/ul>
+&lt;p>After that, the VM can be turned on with:&lt;/p>
+&lt;p>&lt;code>vmplayer newdir/flatcar/flatcar.vmx&lt;/code>&lt;/p>
+&lt;p>And voilá, you got a Flatcar Linux machine working.&lt;/p>
+&lt;p>Obviously you can grab the OVA and make the same deployment with Container Configuration in the VMPlayer GUI, but once automated this is much faster to create a farm of VMs for lab :)&lt;/p></description></item></channel></rss>

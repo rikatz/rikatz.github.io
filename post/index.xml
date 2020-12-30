@@ -1,4 +1,461 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on The Katz Experiments</title><link>https://www.rkatz.xyz/post/</link><description>Recent content in Posts on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 01 Nov 2020 22:45:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/post/index.xml" rel="self" type="application/rss+xml"/><item><title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</title><link>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</link><pubDate>Sun, 01 Nov 2020 22:45:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</guid><description>Introduction In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.
-This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.</description></item><item><title>The mix (and mess) of Packet Filter Linux - Part 1</title><link>https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/</link><pubDate>Sun, 13 Sep 2020 22:13:56 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/</guid><description>Introduction So you’ve got a brand new Linux distribution. You start your Kubernetes distributions, and decide for a specific CNI that provides network policies.
-Then you figure out that something is (or is not) working, does an iptables -L to check what is going on and boom: where are all my iptables rules? Worst of all, you put some newer rules but they seem not to work and your traffic is still being blocked.</description></item><item><title>Flatcar Linux in VMware Player — 5 minute command line deploy</title><link>https://www.rkatz.xyz/post/2020-09-13-flatcar/</link><pubDate>Sun, 13 Sep 2020 20:28:50 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-flatcar/</guid><description>So I needed to create a new Kubernetes Lab. Back in time, I’ve created a shell script to deploy a lot of CoreOS servers to my VMware Player, but I hadn’t touched that script since that time.
-With the deprecation of CoreOS and the glorious rise of Flatcar Linux to save us, and while needing to test some stuffs in Calico, it came to my mind ‘why not write how to quick deploy a Flatcar Linux VM in VMware Player without scripts?</description></item></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on The Katz Experiments</title><link>https://www.rkatz.xyz/post/</link><description>Recent content in Posts on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Wed, 30 Dec 2020 17:55:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/post/index.xml" rel="self" type="application/rss+xml"/><item><title>Kubernetes Control Plane natively on FreeBSD with K3s</title><link>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</link><pubDate>Wed, 30 Dec 2020 17:55:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</guid><description>
+&lt;h2 id="introduction">Introduction&lt;/h2>
+&lt;p>I&amp;rsquo;ve been trying, on the past few days make Kubernetes usable on FreeBSD. Why? Some would say I like to suffer. Others would say I have much spare time.&lt;/p>
+&lt;p>To be honest, I&amp;rsquo;m doing this for fun. &lt;a href="https://www.freebsd.org">FreeBSD&lt;/a>, for me, is one of the most stable and performant Operating Systems, and it&amp;rsquo;s sad that we cannot
+use it to run Kubernetes components (yet).&lt;/p>
+&lt;p>In a near future, me and &lt;a href="twitter.com/fuzzykb">Karen Bruner&lt;/a> are planning to make not only the control plane usable, but also to use one of the precedents of containers on
+modern operating systems, even before Docker: &lt;a href="https://www.freebsd.org/doc/handbook/jails.html">Jails&lt;/a> as a &amp;ldquo;container runtime&amp;rdquo;.&lt;/p>
+&lt;p>I&amp;rsquo;m also using &lt;a href="https://k3s.io/">k3s&lt;/a> because I became too lazy to configure Kubernetes the hard way :P So bootstrapping an etcd, then the components was too much (for now)
+just to have some fun. But maybe some day, will do.&lt;/p>
+&lt;p>&lt;strong>Spoiler alert&lt;/strong>: All the main components of Kubernetes can be compiled for FreeBSD. An exception, right now is just &lt;a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/">kubelet&lt;/a>
+that have, in a method a wrong syscall to fetch the node boottime, but a &lt;a href="https://github.com/kubernetes/kubernetes/pull/97270">PR&lt;/a> was created to correct that.&lt;/p>
+&lt;h2 id="removing-code-before-compiling">Removing code before compiling&lt;/h2>
+&lt;p>So K3s is a AIO (all in one) binary that runs all the components necessary to make Kubernetes works. You can use Alex Ellis &lt;a href="https://github.com/alexellis/k3sup">k3sup&lt;/a>
+to bootstrap a Kubernetes cluster really, really fast.&lt;/p>
+&lt;p>Karen has also shown &lt;a href="https://productionwithscissors.run/2020/12/26/adventures-in-freebernetes-tutorial-build-your-own-bare-vm-k3s-cluster/">how to do this with FreeBSD&lt;/a> as a virtualization host + Linux machines running over bhyve (It&amp;rsquo;s a FreeBSD + bhyve + Linux + k3sup) and you should really check this!&lt;/p>
+&lt;p>But going back to the main subject: k3s does not natively compile for FreeBSD. And why this happens? Because it needs some components that can only be compiled on Linux (or Windows) to work.&lt;/p>
+&lt;p>As an example, it embeds &lt;a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/">kube-proxy&lt;/a>. But, kube-proxy needs &lt;a href="https://en.wikipedia.org/wiki/Iptabl">iptables&lt;/a> and ipvs(&lt;a href="https://en.wikipedia.org/wiki/IP_Virtual_Server">https://en.wikipedia.org/wiki/IP_Virtual_Server&lt;/a>) to compile, which are Linux native technologies, not present on FreeBSD kernel.&lt;/p>
+&lt;p>The same happens with &lt;a href="https://github.com/coreos/flannel">flannel&lt;/a>, which is embedded in the code and used as the &lt;a href="https://github.com/containernetworking/cni">CNI&lt;/a>.&lt;/p>
+&lt;p>Fortunately, all of this code are present on a main package of k3s: &lt;strong>agent&lt;/strong>. But, we don&amp;rsquo;t need agent for our Control Plane, because agent is responsible for behaving like&amp;hellip;AN AGENT for k3s :D&lt;/p>
+&lt;p>So, moving on, you can see the necessary modifications to make k3s compile for FreeBSD here: &lt;a href="https://github.com/k3s-io/k3s/compare/v1.20.0+k3s2...rikatz:fbsd-control-plane">https://github.com/k3s-io/k3s/compare/v1.20.0+k3s2...rikatz:fbsd-control-plane&lt;/a>&lt;/p>
+&lt;p>Explaining:&lt;/p>
+&lt;ul>
+&lt;li>There are some files I hadn&amp;rsquo;t changed, but appear as difference because I&amp;rsquo;ve made all the mods from upstream branch&lt;/li>
+&lt;li>On the &lt;code>main.go&lt;/code> files (cmd/k3s/main.go and main.go) the call to &amp;ldquo;agent&amp;rdquo; packages is removed. The resulting binary wont have &amp;ldquo;agent&amp;rdquo; subcommand, but only &amp;ldquo;server&amp;rdquo;, &amp;ldquo;kubectl&amp;rdquo;, etc.&lt;/li>
+&lt;li>On &lt;code>pkg/cli/server/server.go&lt;/code> all the references for &lt;code>agent&lt;/code> and &lt;code>rootless&lt;/code> are removed. This way, we are not using anything from &lt;code>agent&lt;/code> package that can stop us from compiling!&lt;/li>
+&lt;li>On &lt;code>pkg/daemons/executor&lt;/code> interface, all the references for Kubelet and KubeProxy are removed. We&amp;rsquo;re running control plane, and as both of those components does not compile in FreeBSD, let&amp;rsquo;s get rid of them&lt;/li>
+&lt;li>On &lt;code>pkg/server/server.go&lt;/code> all the references for rootless/rootlessports are removed, because this package uses some native Linux calls to make rootless works (and we&amp;rsquo;re not running anything as a container anyway!)&lt;/li>
+&lt;/ul>
+&lt;p>There&amp;rsquo;s one more item to take note: On &lt;a href="https://github.com/rikatz/k3s/blob/fbsd-control-plane/pkg/cli/server/server.go#L47">server.go&lt;/a> k3s uses an artifact to masquerade its process to not expose some credential passed as an argument.&lt;/p>
+&lt;p>But the library used (gspt) uses some headers and some sort of CGO, so you can make two choices here:&lt;/p>
+&lt;ul>
+&lt;li>Remove the mentioned line (and the referenced library) and be aware someone using ps wwwaux can see your credentials&lt;/li>
+&lt;li>Keep the line, but compile on a FreeBSD machine (instead of using GOOS=freebsd on a Linux machine). Also, be aware that &lt;strong>WITH THIS OPTION K3S DOES NOT COMPILE FOR RPI3/ARM64&lt;/strong> (or maybe you need a rpi3 and compile there, which is plausible but I didn&amp;rsquo;t tried!)&lt;/li>
+&lt;/ul>
+&lt;p>One alternative here (and I need to check if this is possible) is to replace this to some syscall.&lt;/p>
+&lt;h2 id="compiling">Compiling&lt;/h2>
+&lt;p>So now that all the modifications have been explained, compiling is pretty easy:&lt;/p>
+&lt;ul>
+&lt;li>If you are on a Linux machine (and removed the gspt line mentioned above)&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>GOOS=freebsd go build -o k3s main.go
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>You can put also a GOARCH=arm64 together with GOOS=freebsd and compile it for RPi3&lt;/p>
+&lt;ul>
+&lt;li>If you are on a FreeBSD machine:&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>go build -o k3s main.go
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Aaaand that&amp;rsquo;s it!&lt;/p>
+&lt;h2 id="running">Running&lt;/h2>
+&lt;p>Well, so here we got a problem. K3s was built to run as a standalone AIO with embedded database (sqlite), or you can use an external database (postgres, mysql, etcd, etc).&lt;/p>
+&lt;p>But, it happens that sqlite is built with CGO, and because we don&amp;rsquo;t have it on FreeBSD the best option FOR ME was: install a default Postgres and make it run.&lt;/p>
+&lt;p>Here a side note: I didn&amp;rsquo;t put much effort on trying to make sqlite works, and instead I&amp;rsquo;ve directly jumped to Postgres because it was the easiest path. But, be my guest, and tell me what have you discovered!&lt;/p>
+&lt;p>Well, so, to make it run we need:&lt;/p>
+&lt;ul>
+&lt;li>A Postgres DB&lt;/li>
+&lt;li>The generated binary&lt;/li>
+&lt;/ul>
+&lt;p>Installing Postgres on FreeBSD is really, really simple but yes, you can run this on an external DB running on Linux, in some cloud, etc.&lt;/p>
+&lt;p>But let&amp;rsquo;s install this DB. Assuming you have a FreeBSD box working:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>pkg update
+&lt;span class="ln">2&lt;/span>pkg install postgresql12-server postgresql12-client
+&lt;span class="ln">3&lt;/span>sysrc postgresql_enable=yes
+&lt;span class="ln">4&lt;/span>/usr/local/etc/rc.d/postgresql initdb
+&lt;span class="ln">5&lt;/span>service postgresql start
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And that&amp;rsquo;s it for PostgreSQL. Obviously, this is a VERY INSECURE lab setup! Don&amp;rsquo;t run this (or anything in this tutorial, to be fair) in Production!&lt;/p>
+&lt;p>Well, with Postgres up and running, you can run k3s and your control plane will be magically bootstrapped:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>./k3s server --datastore-endpoint=postgres://postgres@127.0.0.1?sslmode=disable
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>This is going to print a lot of messages in your terminal, and now you have a Kubernetes Control Plane up and running natively on FreeBSD. Nice, right?&lt;/p>
+&lt;h2 id="testing">Testing&lt;/h2>
+&lt;p>Well, ok, the daemon is running but PROVE ME IT WORKS!&lt;/p>
+&lt;p>Okie, so first of all, you need somewhere to run a kubectl. You can run it on FreeBSD (it&amp;rsquo;s easy to compile! I promise!) but I wont go that way right now.&lt;/p>
+&lt;p>So, grab the kubeconfig you&amp;rsquo;re going to use on &lt;code>/var/lib/rancher/k3s/server/cred/admin.kubeconfig&lt;/code>, plus the referenced certificates in &lt;code>/var/lib/rancher/k3s/server/tls/client-*&lt;/code> and &lt;code>/var/lib/rancher/k3s/server/tls/server-ca.crt&lt;/code>, and copy them to another machine that kubectl is installed.&lt;/p>
+&lt;p>Edit the admin.kubeconfig file, changing:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>server: https://127.0.0.1:6444&lt;/code> -&amp;gt; &lt;code>server: https://fbsd-ip:6443&lt;/code>&lt;/li>
+&lt;li>&lt;code>certificate-authority&lt;/code>, &lt;code>client-certificate&lt;/code> and &lt;code>client-key&lt;/code> to point to certificates location. If they&amp;rsquo;re on the same directory as admin.kubeconfig, just remove the leading path and leave only the file name&lt;/li>
+&lt;/ul>
+&lt;p>Great! So now let&amp;rsquo;s check if kubectl can communicate with the server and what it brings to us:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig version
+&lt;span class="ln">2&lt;/span>Client Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.1&amp;#34;, GitCommit:&amp;#34;c4d752765b3bbac2237bf87cf0b1c2e307844666&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-18T12:09:25Z&amp;#34;, GoVersion:&amp;#34;go1.15.5&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;linux/amd64&amp;#34;}
+&lt;span class="ln">3&lt;/span>Server Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.0-k3s1&amp;#34;, GitCommit:&amp;#34;3559625e27197f60bcc39c4b3ecffc80bad7785e&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-08T20:42:55Z&amp;#34;, GoVersion:&amp;#34;go1.15.6&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;freebsd/amd64&amp;#34;}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So if you take a look above, you&amp;rsquo;ll see that the Server Platform is: &lt;code>&amp;quot;freebsd/amd64&amp;quot;&lt;/code> (I&amp;rsquo;m running as a VM here in my machine!)&lt;/p>
+&lt;p>&amp;ldquo;Nah, but this is not enough! I wanna see some Kubernetes Nodes!&amp;rdquo; - Me, talking with myself!&lt;/p>
+&lt;p>OK, so let&amp;rsquo;s go. First, you need to install k3s binary on some Linux machine. Go ahead, and grab some &lt;a href="https://github.com/k3s-io/k3s#manual-download">release&lt;/a>&lt;/p>
+&lt;p>Nice, so now we need the token to join our agent/node with our Control Plane. It&amp;rsquo;s located on the Control Plane machine, so grab the token with:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>cat /var/lib/rancher/k3s/server/token
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>With that token copied, go back to your Linux machine that you&amp;rsquo;re going to run your node/agent and run:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo k3s agent --server https://fbsd-ip:6443 --token THE-TOKEN-YOU-TOOK-NOTE
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>After some time, your node will appear for the Control Plane. You can check this way:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig get nodes
+&lt;span class="ln">2&lt;/span>NAME STATUS ROLES AGE VERSION
+&lt;span class="ln">3&lt;/span>node123 Ready &amp;lt;none&amp;gt; 68m v1.20.0+k3s2
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Go ahead, run some Pods, be happy :D&lt;/p></description></item><item><title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</title><link>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</link><pubDate>Sun, 01 Nov 2020 22:45:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</guid><description>
+&lt;h2 id="introduction">Introduction&lt;/h2>
+&lt;p>In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.&lt;/p>
+&lt;p>This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.&lt;/p>
+&lt;p>&lt;strong>Spoiler alert&lt;/strong>: As I’ve said in the previous article, I’m not a expert of eBPF, but a new learner. So expect mistakes, and provide me feedback! I do appreciate that!&lt;/p>
+&lt;h2 id="what-is-ebpf">What is eBPF&lt;/h2>
+&lt;p>The simplest definition I’ve seen somewhere is that eBPF is a way to run specific and confined programs within Linux Kernel, but without having to put code into the Kernel tree or developing modules.&lt;/p>
+&lt;p>Some articles define eBPF as a &amp;ldquo;Virtual Machine&amp;rdquo; (in the concept of isolation, not the VMs like KVM thing) that run programs triggered by some Kernel action.&lt;/p>
+&lt;p>As an example, imagine a system call that happens (like opening a file) and you want to trigger an action to count how many times that system call happens. Or a program that is triggered when a packet arrives on a specific network interface.&lt;/p>
+&lt;p>Because those programs are written in C (yeah, sorry!), compiled and attached to some part of your system, eBPF needs to count with some user space area to read and write dynamic data. This area is called map, and can be manipulated while the eBPF program runs.&lt;/p>
+&lt;p>So, for our examples, we’re going to write a really simple packet filter program, attach it to our network interface and see what and how it happens.&lt;/p>
+&lt;p>For some more detailed explanation of eBPF, I recommend the following readings:&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://docs.cilium.io/en/v1.8/bpf/">https://docs.cilium.io/en/v1.8/bpf/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://ebpf.io/what-is-ebpf">https://ebpf.io/what-is-ebpf&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h2 id="methodology">Methodology&lt;/h2>
+&lt;p>The methodology is going to be pretty much the same as the previous part of the article: write a program that logs and accept (or drop) a packet in port 12345, open a &lt;code>netcat&lt;/code> listening in this port and trigger the actions.&lt;/p>
+&lt;p>So for the sake of this article, the &lt;em>action&lt;/em> that is going to trigger our program is a packet arriving on the network interface, and the magic is going to happen there.&lt;/p>
+&lt;p>eBPF have at least two ways to deal with the packet filtering, like XDP, that I’m going to cover them now, and TC that I’ll cover in some other article&lt;/p>
+&lt;h2 id="xdp">XDP&lt;/h2>
+&lt;p>XDP, also known as eXpress Data Path is a specific eBPF program that runs close to the Network device. It’s run even before the packet can arrive at the kernel stack.&lt;/p>
+&lt;p>There are some network devices that support executing XDP programs directly, so yes, XDP is so powerful that you can process and take an action (like drop) a packet almost in the wire, without needing to overload your kernel.&lt;/p>
+&lt;p>Because such a low level processing is executed, we need to first have some understanding of how a network packet is composed, so let’s assume this is an Ethernet packet.&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/packet-dump.png" alt="A packet dump.">&lt;/p>
+&lt;p>Nice, so we’re mostly interested in the IP part (the source and destination address) and TCP part (Dst port 12345).&lt;/p>
+&lt;p>Hopefully there are some helper libraries that allow us to extract the part we’re interested in. I’ll not go through the situation &amp;ldquo;if this was an IPv6 IP packet&amp;rdquo;, but the program may be different.&lt;/p>
+&lt;p>I’m using &lt;a href="https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf">this nice article&lt;/a> as a reference to write my program, but will use a TCP packet instead of an UDP one.&lt;/p>
+&lt;p>So, to start this, we need to have clear that this is a program being run almost in the wire, so we’re receiving bytes. Those bytes are represented by XDP with a struct called &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3909-L3918">xdp_md&lt;/a> and contains all the necessary data encoded. In this struct you can see fields as &lt;code>data&lt;/code> (that represents the start of the packet), &lt;code>data_end&lt;/code> (that represents the end of the packet) and fields that represents which was the device that the packet arrive and leaves the machine (&lt;code>ingress_ifindex&lt;/code> and &lt;code>egress_ifindex&lt;/code>).&lt;/p>
+&lt;p>But as far as I know and some folks have stated to me, XDP only works with ingressing packets, so you cannot take an action in a packet leaving the machine, other than changing it’s attributes, like the destination IP.&lt;/p>
+&lt;p>Based on the &lt;a href="https://en.wikipedia.org/wiki/OSI_model">OSI Model&lt;/a> we will need to dissect the layer 2 (ethernet), shift to the layer 3 (the IP protocol) and then to the layer 4 (the TCP part) to get our information, so we’re going to code something like this to get our information:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-cpp" data-lang="cpp">&lt;span class="ln"> 1&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="nf">myxdpprog&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="nc">xdp_md&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Receiving the bytes in the pointer &amp;#34;ctx&amp;#34;
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data_end&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data_end&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">ethhdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 5&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Assuming this is an Ethernet Frame
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">iphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="c1">// Populating the IP part
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="c1">&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">10&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">protocol&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">IPPROTO_TCP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">tcphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="c1">// And then the TCP part
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="p">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>OK, great. So this is a bunch of uncontextualized C code, what does this mean? Exactly what is stated before: we receive the bytes, and dissect them all over as a IPv4 packet with TCP protocol.&lt;/p>
+&lt;p>Now that we have:&lt;/p>
+&lt;ul>
+&lt;li>An &lt;code>ip&lt;/code> variable containing a &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/ip.h#L86-L106">iphdr&lt;/a> struct that contains fields like source (&lt;code>saddr&lt;/code>) and destination (&lt;code>daddr&lt;/code>) IPv4 address&lt;/li>
+&lt;li>A &lt;code>tcp&lt;/code> variable containing a &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/tcp.h#L25-L27">tcphdr&lt;/a> with fields like the source (&lt;code>source&lt;/code>) and destination (&lt;code>dest&lt;/code>) port.&lt;/li>
+&lt;/ul>
+&lt;p>Putting all this together we will have a &amp;ldquo;simple&amp;rdquo; program like this:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-cpp" data-lang="cpp">&lt;span class="ln"> 1&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/bpf.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/if_ether.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/ip.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/tcp.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;netinet/in.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;bpf_helpers.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="cp">&lt;/span>
+&lt;span class="ln"> 8&lt;/span>&lt;span class="cp">#define bpf_printk(fmt, ...) \
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="cp">({ \
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="cp"> char ____fmt[] = fmt; \
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="cp"> bpf_trace_printk(____fmt, sizeof(____fmt), \
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="cp"> ##__VA_ARGS__); \
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="cp">})
+&lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="cp">&lt;/span>
+&lt;span class="ln">15&lt;/span>&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;xdpprogram&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="ln">16&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">myxdpprogram&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="nc">xdp_md&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data_end&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data_end&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">19&lt;/span> &lt;span class="c1">// Dissecting the Ethernet Frame
+&lt;/span>&lt;span class="ln">20&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">ethhdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">21&lt;/span>
+&lt;span class="ln">22&lt;/span> &lt;span class="c1">// Does the size of the packet really fits as an Ethernet Frame
+&lt;/span>&lt;span class="ln">23&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">24&lt;/span>
+&lt;span class="ln">25&lt;/span> &lt;span class="c1">// Dissecting the IPv4 part
+&lt;/span>&lt;span class="ln">26&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">iphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">27&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">28&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">protocol&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">IPPROTO_TCP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">29&lt;/span>
+&lt;span class="ln">30&lt;/span> &lt;span class="c1">// Dissecting the TCP part of the program
+&lt;/span>&lt;span class="ln">31&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">tcphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">32&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">33&lt;/span>
+&lt;span class="ln">34&lt;/span> &lt;span class="c1">// And now we can see if this is port 12345 :)
+&lt;/span>&lt;span class="ln">35&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">tcp&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">dest&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">ntohs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">12345&lt;/span>&lt;span class="p">))&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">36&lt;/span> &lt;span class="n">bpf_printk&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;XDP drop on TCP port 12345&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">37&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="n">XDP_DROP&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">38&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">39&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">40&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">41&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">42&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">43&lt;/span> &lt;span class="c1">// Take a default action
+&lt;/span>&lt;span class="ln">44&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="n">XDP_PASS&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">45&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">46&lt;/span>
+&lt;span class="ln">47&lt;/span>&lt;span class="kt">char&lt;/span> &lt;span class="n">_license&lt;/span>&lt;span class="p">[]&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;license&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s">&amp;#34;GPL&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Wow wait! What is this all about?&lt;/p>
+&lt;p>OK, so first of all, eBPF programs should ALWAYS return from the function, otherwise they won’t compile. XDP programs have some &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3898-L3904">actions&lt;/a> that can be taken:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>XDP_DROP&lt;/code> - Drops the packet&lt;/li>
+&lt;li>&lt;code>XDP_PASS&lt;/code> - Pass the packet&lt;/li>
+&lt;li>&lt;code>XDP_TX&lt;/code> - Returns the packet to the interface that received it&lt;/li>
+&lt;li>&lt;code>XDP_REDIRECT&lt;/code> - Redirect the packet to another interface&lt;/li>
+&lt;li>&lt;code>XDP_ABORTED&lt;/code> - An error in the application happened, and the packet is also dropped.&lt;/li>
+&lt;/ul>
+&lt;p>Also, remember the code runs as a Kernel program? This way, we cannot simply log with a printf call. Instead we need to log as a kernel program and this is what the call of &lt;code>bpf_printk&lt;/code> does. This is a macro defined in the top of the file, and which calls &lt;code>bpf_trace_printk&lt;/code> that is provided by the header &amp;ldquo;&amp;lt;bpf_helpers.h&amp;gt;&amp;rdquo; which is part of libbpf and will be shown further.&lt;/p>
+&lt;p>The &lt;code>SEC&lt;/code> directive is a macro that defines the program name that the &amp;ldquo;ip command&amp;rdquo; (you’ll see it later) looks to load into the device. You can have multiple programs in the same source code, this way you need to name them.&lt;/p>
+&lt;p>Also, we need to convert the integer &amp;ldquo;12345&amp;rdquo; to something that represents the port in the packet, so the function &lt;a href="https://linux.die.net/man/3/ntohs">ntohs&lt;/a> is used. This is provided by the header &amp;ldquo;netinet/in.h&amp;rdquo;.&lt;/p>
+&lt;p>Finally, because we’re using the helpers functions, the license of the program MUST BE GPL, so the last line defines that.&lt;/p>
+&lt;h2 id="compiling-and-loading-everything">Compiling and loading everything&lt;/h2>
+&lt;p>OK, so we have our program. How can we use it? It needs to be compiled with and loaded in the device that is going to deal with the packets.&lt;/p>
+&lt;p>There’s a bunch of ways of doing this, I’ll try to keep it simple.&lt;/p>
+&lt;p>First of all, you need to install all the necessary tools to compile the program. You can find the dependencies for a good number of distros &lt;a href="https://github.com/xdp-project/xdp-tutorial/blob/master/setup_dependencies.org">here&lt;/a>. In my case, I’m using an Ubuntu Server for the tests so:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>sudo apt install clang llvm libelf-dev libpcap-dev gcc-multilib build-essential linux-tools-common linux-tools-generic
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Also you’ll need to download libbpf:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>git clone https://github.com/libbpf/libbpf.git
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now, to compile the program, considering it&amp;rsquo;s source is called &lt;code>drop12345.c&lt;/code>, simple do:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>clang -Ilibbpf/src -O2 -target bpf -c drop12345.c -o drop12345.o
+&lt;/code>&lt;/pre>&lt;/div>&lt;blockquote>
+&lt;p>&lt;em>NOTE&lt;/em>: Please be aware, I don’t know if this is the safer way to compile the program, as this is an EXAMPLE!!&lt;/p>
+&lt;/blockquote>
+&lt;blockquote>
+&lt;p>&lt;em>NOTE2&lt;/em>: If you have errors compiling, make sure the -I argument is pointing to the libbpf/src directory, and also that you’re using the right libraries in the &amp;ldquo;include&amp;rdquo; directives on the C code. Also that you have all the linux kernel headers file installed :)&lt;/p>
+&lt;/blockquote>
+&lt;p>And voilà! You have an object called &amp;ldquo;drop12345.o&amp;rdquo; that can be loaded in your network device.&lt;/p>
+&lt;p>So let’s do it (remember to replace &lt;code>ens33&lt;/code> with the name of your device)&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ip link set dev ens33 xdp obj drop12345.o sec xdpprogram
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now you can try to connect to the port 12345 of your host, and see the logs with:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo cat /sys/kernel/debug/tracing/trace_pipe
+&lt;span class="ln">2&lt;/span> &amp;lt;idle&amp;gt;-0 [001] ..s. 6541.153908: 0: XDP drop on TCP port 12345
+&lt;span class="ln">3&lt;/span>[...]
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you need to unload the program, simple do:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ip link set dev ens33 xdp off
+&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="and-where-is-xdp-positioned">And where is XDP positioned?&lt;/h2>
+&lt;p>So remember when I said earlier that the XDP programs are executed before the packet can have a chance to reach the rest of kernel stack?&lt;/p>
+&lt;p>In the previous article, we’ve seen that nftables is positioned before iptables when dealing with filtering, so let’s load our previous nftables ruleset, and see if the packet is logged by XDP or by nftables:&lt;/p>
+&lt;p>Before loading the XDP program, we can see by the timestamp that nftables is dropping the packet:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>[ 6976.808976] nft-inputIN=ens33 SRC=192.168.86.1 DST=192.168.86.128 DPT=12345
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>But then, when the xdp program is loaded, no further log appears in nftables stack, but take a look at the timestamp of the following message:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>7237.743455: 0: XDP drop on TCP port 12345
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>To confirm:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/input-xdp.png" alt="The input flow with XDP.">&lt;/p>
+&lt;p>I’m not going to make the Output test, as it’s stated that XDP is only for incoming packets. But I can try to take further tests in some later article :)&lt;/p>
+&lt;h2 id="final-thoughts-and-next-steps">Final Thoughts and next steps&lt;/h2>
+&lt;p>Right now the program is simple and static, so if you need to dynamic update it you need to change the code and recompile it. eBPF can use a structure called &lt;code>map&lt;/code>, which can be used to &amp;ldquo;trade&amp;rdquo; informations between the running program and userspace, as an example dinamically feeding a program with IPs that should be blocked.&lt;/p>
+&lt;p>&lt;em>In my opinion&lt;/em>, the biggest issue when using eBPF is to know exactly what is being executed, as this is a static compiled program. One can compile and attach it to a network interface and if you don’t have the source code, you won’t know what is happening, while with IPTables and NFTables you can simply dump the rules.&lt;/p>
+&lt;p>A tool called &lt;code>bpftool&lt;/code> can be used to show you things like &amp;ldquo;What program is loaded in which part of the system&amp;rdquo;, like XDP or TC (that will be covered in the next post), but still, you only know where, but not what. There was an effort to create a program called &amp;ldquo;bpfilter&amp;rdquo;, but it seems to be frozen right now.&lt;/p>
+&lt;p>Finally, XDP is not the only way that you can use eBPF programs to make packet filtering in Linux and in the next article I will cover how eBPF + TC programs works :)&lt;/p>
+&lt;p>Thank you for reading this, I expect to clarify a little bit this new world (also for me!) of eBPF stuff :)&lt;/p>
+&lt;p>And thanks for all the hard work the community has been doing making eBPF a great new technology, and also documenting! The next section have some nice references that I’ve used, but there’s a lot more materials, posts, etc.&lt;/p>
+&lt;h2 id="references">References:&lt;/h2>
+&lt;ul>
+&lt;li>&lt;a href="https://ebpf.io">https://ebpf.io&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html">https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html">https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf">https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/xdp-project/xdp-tutorial/">https://github.com/xdp-project/xdp-tutorial/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://ebpf.io">https://ebpf.io&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263">https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf">https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/">https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.cilium.io/en/v1.8/bpf/">https://docs.cilium.io/en/v1.8/bpf/&lt;/a>&lt;/li>
+&lt;/ul></description></item><item><title>The mix (and mess) of Packet Filter Linux - Part 1</title><link>https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/</link><pubDate>Sun, 13 Sep 2020 22:13:56 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/</guid><description>
+&lt;h2 id="introduction">Introduction&lt;/h2>
+&lt;p>So you’ve got a brand new Linux distribution. You start your Kubernetes distributions, and decide for a specific CNI that provides network policies.&lt;/p>
+&lt;p>Then you figure out that something is (or is not) working, does an &lt;code>iptables -L&lt;/code> to check what is going on and boom: where are all my iptables rules? Worst of all, you put some newer rules but they seem not to work and your traffic is still being blocked.&lt;/p>
+&lt;p>Well, welcome to modern Linux. IPTables is not anymore the only way of doing packet filtering (since a long time, to be honest) and there might be something else blocking it.&lt;/p>
+&lt;p>The idea of this article is to show some of those packet filtering technologies, with simple examples and what’s their position during the packet filtering inside the flow.&lt;/p>
+&lt;p>&lt;strong>Spoiler alert:&lt;/strong> I’m not really an IPTables/nftables/eBPF specialist (far from that), and the idea here is to study the impact of each one. Feedbacks of this study are more than welcome!&lt;/p>
+&lt;h2 id="a-little-bit-of-history">A little bit of history&lt;/h2>
+&lt;p>Back in time (before I’ve ever started to work with Linux), kernel 2.2 did already have capabilities of packet filtering with &lt;strong>&lt;a href="https://en.wikipedia.org/wiki/Ipchains">ipchains&lt;/a>&lt;/strong>&lt;/p>
+&lt;p>In 1998 it was superseded by &lt;strong>&lt;a href="https://en.wikipedia.org/wiki/Iptables">iptables&lt;/a>&lt;/strong> which has been the de-facto command to make packet filtering in Linux since then.&lt;/p>
+&lt;p>And why do I say “command”? Well, Linux is only a kernel composed of features. The packet filtering is done inside the kernel, once the packet arrives in the network card and until it leaves the host. Iptables is the command, in userspace that knows how to say to the kernel “insert this rule that will DROP all the icmp packets”, as an example.&lt;/p>
+&lt;p>The same happens in almost everything in Linux. When you issue the “ls” command, ls is a program inside the userspace that will make a &lt;strong>&lt;a href="https://en.wikipedia.org/wiki/System_call">syscall&lt;/a>&lt;/strong> to Linux Kernel, that will then ask for the filesystem which files it have (which turns into another call to the disk, listing it contents).&lt;/p>
+&lt;p>So from now one, when we say “iptables” and “nftables”, remember that all of them are just a layer/commands that call the kernel API and put rules into that for the proper packet filtering. By the way, the part of the kernel that deals with packet filtering for both of those programs is called “netfilter” but each one have its special part in the netfilter subsystem.&lt;/p>
+&lt;p>I’ll not enter into eBPF behavior right now, as it’s a program that is compiled and runs inside the kernel (not a userspace command). We’ll see more about that in the Part 2 of the article&lt;/p>
+&lt;p>Well, going back to history: after iptables, in 2014 &lt;strong>&lt;a href="https://en.wikipedia.org/wiki/Nftables">nftables&lt;/a>&lt;/strong> got merged into the kernel. Now the thing here is that, nftables also uses netfilter, but in a different part of the kernel. So you might have iptables and nftables co-existing, but one does not know about the existence of the other.&lt;/p>
+&lt;p>Yes, it happens. A packet might arrive in the nftables part of the netfilter, but never arrive in the iptables part. And we will see that happening in detail.&lt;/p>
+&lt;p>In parallel with nftables, a new technology called &lt;strong>&lt;a href="https://ebpf.io/">eBPF&lt;/a>&lt;/strong> was rising in the kernel. But the main idea of eBPF wasn’t to be packet filtering (although the name is Extended Berkeley Packet Filtering) but allow programs to be compiled and attached to the kernel to provide observability, networking and other features.&lt;/p>
+&lt;h2 id="methodology">Methodology&lt;/h2>
+&lt;p>So for this study, the methodology is going to be quite simple. I’ll install a Linux distribution with Kernel &amp;gt;= 5.4, and make the following tests:&lt;/p>
+&lt;ul>
+&lt;li>Run a simple tcp port 12345 with netcat to verify the port is open: &lt;code>nc -l -k 12345&lt;/code>&lt;/li>
+&lt;li>Create rules to log and drop a packet to TCP port 12345 in each of the netfilter stacks and check the logs to see where is it being dropped.&lt;/li>
+&lt;li>Change the rules to accept the packet in each of the netfilter stacks, and check what&amp;rsquo;s the way the packet flows through the logs.&lt;/li>
+&lt;li>Make some experiments / inversions both in input and output chains to gather more information about the positioning of each stacks&lt;/li>
+&lt;li>Put some eBPF + XDP (in part 2) and check if the package arrives at the netfilter stack&lt;/li>
+&lt;li>Make the same test, but now putting eBPF + TC program (again, in part 2)&lt;/li>
+&lt;li>Try to join all of this with OVS and check what’s the position of OVS in the above mess :)&lt;/li>
+&lt;/ul>
+&lt;p>I’m not entering into the packet forwarding flow (the machine acting as a router) in this article, but this can be explored further later (maybe a Part 3?)&lt;/p>
+&lt;h2 id="iptables">IPTables&lt;/h2>
+&lt;p>So now, let’s go through IPTables with some brief explanation.&lt;/p>
+&lt;p>IPTables as the name says is composed by&amp;hellip;tables! Tadah! So, basically you have 4 tables here:&lt;/p>
+&lt;ul>
+&lt;li>Filter -&amp;gt; deals with packet filtering inside the machine. &lt;strong>We’re going to use this one in this article&lt;/strong>&lt;/li>
+&lt;li>Nat -&amp;gt; Deals with packets being routed through the machine.&lt;/li>
+&lt;li>Mangle -&amp;gt; Deals with packet behavior changing&lt;/li>
+&lt;li>Raw -&amp;gt; this is a special one. Raw table deals with packets before the kernel starts tracking it (see conntrack).&lt;/li>
+&lt;/ul>
+&lt;p>The below picture shows the packet flowing through iptables:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/iptables-diagram.png" alt="IPTables flow.">
+Original picture from: &lt;a href="https://www.booleanworld.com/depth-guide-iptables-linux-firewall/">https://www.booleanworld.com/depth-guide-iptables-linux-firewall/&lt;/a>&lt;/p>
+&lt;p>So, to get started let’s create the simpler log and drop iptables rule. I’ll use the command iptables-legacy to use the old iptables, as the actual “iptables” command points to iptables-nft which inserts the rule into nftables:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>iptables-legacy -A INPUT -p tcp --dport &lt;span class="m">12345&lt;/span> -j LOG --log-level &lt;span class="m">4&lt;/span> --log-prefix ipt-input
+&lt;span class="ln">2&lt;/span>iptables-legacy -A INPUT -p tcp --dport &lt;span class="m">12345&lt;/span> -j DROP
+&lt;span class="ln">3&lt;/span>iptables-legacy -A OUTPUT -p tcp --sport &lt;span class="m">12345&lt;/span> -j LOG --log-level &lt;span class="m">4&lt;/span> --log-prefix ipt-output
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>With the code above, the linux kernel will log, with a level of “Warning” when a packet arrives in tcp port 12345 and drop it. Also when it leaves the machine with source port 12345 it will be logged (for further tests). Assuming the port 12345 is up and listening connections, and the above filter rules has been already created, let’s see what happens in the log. I&amp;rsquo;m wrapping the log here to fit in the code snippet ;)&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-s" data-lang="s">&lt;span class="ln">1&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">20&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">34&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">53&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">719.092757&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">ipt&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So the packet arrives into the stack and gots logged. After that, the packet is dropped by the &lt;strong>DROP&lt;/strong> rule.&lt;/p>
+&lt;h2 id="adding-nftables-to-the-recipe">Adding NFTables to the recipe&lt;/h2>
+&lt;p>As IPTables, NFtables also works with tables. But differently from IPTables, nftables was designed so the chain of rules is much more simpler, so when you got a rule that needs to “log and then drop” the rule is evaluated as once, instead of going through the whole stack. Also iptables deals natively with “ipset”, which allows you to create rules with sets that can be updated dynamically, instead of having the need to change directly a rule (delete a rule, create a newer rule).&lt;/p>
+&lt;p>There are some other features that I’m not going to jump in here, but it’s worth reading nftables wiki: &lt;a href="https://wiki.nftables.org/wiki-nftables/index.php/Main_Page">https://wiki.nftables.org/wiki-nftables/index.php/Main_Page&lt;/a> and there’s a nice nftables reference and comparison here: &lt;a href="https://www.slideshare.net/azilian/nftables-the-evolution-of-linux-firewall">https://www.slideshare.net/azilian/nftables-the-evolution-of-linux-firewall&lt;/a>&lt;/p>
+&lt;p>So to create nftables rules, we can go through two different ways: using the nft command, that deals natively with the nftables netfilter stack, or using the iptables-nft command, that brings compatibility with iptables command syntax.&lt;/p>
+&lt;p>For this test I’ll use the native command and load the following rules:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-js" data-lang="js">&lt;span class="ln"> 1&lt;/span>&lt;span class="nx">flush&lt;/span> &lt;span class="nx">ruleset&lt;/span>
+&lt;span class="ln"> 2&lt;/span>
+&lt;span class="ln"> 3&lt;/span>&lt;span class="nx">table&lt;/span> &lt;span class="nx">inet&lt;/span> &lt;span class="nx">filter&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="nx">chain&lt;/span> &lt;span class="nx">input&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="nx">type&lt;/span> &lt;span class="nx">filter&lt;/span> &lt;span class="nx">hook&lt;/span> &lt;span class="nx">input&lt;/span> &lt;span class="nx">priority&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="nx">tcp&lt;/span> &lt;span class="nx">dport&lt;/span> &lt;span class="mi">12345&lt;/span> &lt;span class="nx">log&lt;/span> &lt;span class="nx">level&lt;/span> &lt;span class="nx">warn&lt;/span> &lt;span class="nx">prefix&lt;/span> &lt;span class="s2">&amp;#34;nft-input&amp;#34;&lt;/span> &lt;span class="nx">accept&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="nx">chain&lt;/span> &lt;span class="nx">forward&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="nx">type&lt;/span> &lt;span class="nx">filter&lt;/span> &lt;span class="nx">hook&lt;/span> &lt;span class="nx">forward&lt;/span> &lt;span class="nx">priority&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nx">chain&lt;/span> &lt;span class="nx">output&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="nx">type&lt;/span> &lt;span class="nx">filter&lt;/span> &lt;span class="nx">hook&lt;/span> &lt;span class="nx">output&lt;/span> &lt;span class="nx">priority&lt;/span> &lt;span class="mi">0&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="nx">tcp&lt;/span> &lt;span class="nx">sport&lt;/span> &lt;span class="mi">12345&lt;/span> &lt;span class="nx">log&lt;/span> &lt;span class="nx">level&lt;/span> &lt;span class="nx">warn&lt;/span> &lt;span class="nx">prefix&lt;/span> &lt;span class="s2">&amp;#34;nft-output&amp;#34;&lt;/span> &lt;span class="nx">accept&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">15&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So the rules above will log and accept the package. This way, we can see if it flows first into iptables or nftables. If iptables is in the front, the package will be dropped without any log from nftables. They can be loaded with &lt;code>nft -f file-containing-rules&lt;/code>&lt;/p>
+&lt;p>So our scenario now is:&lt;/p>
+&lt;ul>
+&lt;li>nftables input -&amp;gt; accept&lt;/li>
+&lt;li>iptables input -&amp;gt; drop&lt;/li>
+&lt;/ul>
+&lt;p>And here it is. By the log below, we can see it entering nftables and then iptables. Again, the logs are wrapped to fit into the code snippet:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-s" data-lang="s">&lt;span class="ln">1&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">14&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">26&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3092.194827&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">2&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">14&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">26&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3092.194869&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">ipt&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Let’s change the input scenario to the following:&lt;/p>
+&lt;ul>
+&lt;li>nftables input -&amp;gt; drop&lt;/li>
+&lt;li>iptables input -&amp;gt; drop&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-s" data-lang="s">&lt;span class="ln">1&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">16&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">38&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3224.260511&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>&lt;strong>No further iptables log appears!&lt;/strong>. This means that, regarding the iptables and nftables input flow, we can say that nftables has precedence over iptables as the following diagram:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/input-flow-ipt-nft.png" alt="The input flow.">&lt;/p>
+&lt;p>So let’s move to the output scenario. What I want to check is: who is the last mile when a packet is leaving the host? IPTables or NFTables?&lt;/p>
+&lt;p>So remember that iptables rules were created to accept the output? So we can change the input rules of both nftables and iptables to log/accept, and then start working in the output rules:&lt;/p>
+&lt;ul>
+&lt;li>iptables output -&amp;gt; log/drop&lt;/li>
+&lt;li>nftables output -&amp;gt; log/accept&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-s" data-lang="s">&lt;span class="ln">1&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">12&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3858.172623&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">2&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">12&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3858.172684&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">ipt&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">3&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">12&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3858.172736&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">output&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">SRC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">192.168.86.128&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">4&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">12&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">3858.172750&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">ipt&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">output&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">SRC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">192.168.86.128&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So what we can see here is that the packet enters into nftables, then goes to iptables, goes back to nftables and then reaches iptables.&lt;/p>
+&lt;p>Can we surely say that iptables is the last mile of the packet processing? Let’s change the rules to:&lt;/p>
+&lt;ul>
+&lt;li>iptables output -&amp;gt; accept&lt;/li>
+&lt;li>nftables output -&amp;gt; drop&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-s" data-lang="s">&lt;span class="ln">1&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">30&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">4052.554977&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">2&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">30&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">4052.555079&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">ipt&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">input&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">MAC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">00&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="n">c&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">29&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;span class="ln">3&lt;/span>&lt;span class="n">Sep&lt;/span> &lt;span class="m">13&lt;/span> &lt;span class="m">21&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">30&lt;/span>&lt;span class="o">:&lt;/span>&lt;span class="m">27&lt;/span> &lt;span class="n">fw123&lt;/span> &lt;span class="n">kernel&lt;/span>&lt;span class="o">:&lt;/span> &lt;span class="n">[&lt;/span> &lt;span class="m">4052.555137&lt;/span>&lt;span class="n">]&lt;/span> &lt;span class="n">nft&lt;/span>&lt;span class="o">-&lt;/span>&lt;span class="n">output&lt;/span> &lt;span class="n">IN&lt;/span>&lt;span class="o">=&lt;/span> &lt;span class="n">OUT&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="n">ens33&lt;/span> &lt;span class="n">SRC&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">192.168.86.128&lt;/span> &lt;span class="n">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So here it is. The packet never reaches the output log rule from iptables. So we can surely say that the following represents a diagram of the packet flowing to outside of the host:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/output-flow-ipt-nft.png" alt="The output flow.">&lt;/p>
+&lt;h2 id="conclusion-so-far">Conclusion (so far)&lt;/h2>
+&lt;p>So you got something strange in your environment and don’t know why some traffic is being blocked even if no iptables rule is doing that. As we’ve seen here, nftables rules have precedence over iptables rules.&lt;/p>
+&lt;p>If they were created with the compatibility command line tool (iptables-nft) you should first take a look into the output of both commands: &lt;code>iptables-legacy -L&lt;/code> and &lt;code>iptables-nft -L&lt;/code> and try to understand if there are rules in both places, what is inserting those rules there and why.&lt;/p>
+&lt;p>Kubernetes, as an example, has a nice wrapper called.. &lt;a href="https://github.com/kubernetes-sigs/iptables-wrappers/">iptables-wrapper&lt;/a> and helps the components that use iptables to decide which one should be used: the legacy one or the compatible one. But remember, as Kubernetes is not aware of how the other parts of the system (aka CNIs) insert the rules, you might have something messing up with things :)&lt;/p>
+&lt;p>In the next part of this article I’ll take a look into eBPF and the multiple ways of packet filtering. And also, how they deal with netfilter stack.&lt;/p></description></item><item><title>Flatcar Linux in VMware Player — 5 minute command line deploy</title><link>https://www.rkatz.xyz/post/2020-09-13-flatcar/</link><pubDate>Sun, 13 Sep 2020 20:28:50 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-09-13-flatcar/</guid><description>
+&lt;p>So I needed to create a new Kubernetes Lab. Back in time, I’ve created a &lt;a href="https://github.com/rikatz/coreos-vmplayer-deployer">shell script&lt;/a> to deploy a lot of CoreOS servers to my VMware Player, but I hadn’t touched that script since that time.&lt;/p>
+&lt;p>With the deprecation of CoreOS and the glorious rise of Flatcar Linux to save us, and while needing to test some stuffs in Calico, it came to my mind ‘why not write how to quick deploy a Flatcar Linux VM in VMware Player without scripts?’. So here we go.&lt;/p>
+&lt;p>You will need:&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_vmware_ova.ova">The OVA of Flatcar Linux&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/flatcar-linux/container-linux-config-transpiler/releases">CoreOS Configuration Transpiler&lt;/a> (or you can write your &lt;a href="https://docs.flatcar-linux.org/ignition/what-is-ignition/">Ignition&lt;/a> file by your own, but really, not recommended). BTW you will need to compile Configuration Transpiler (sorry about that), but I think in a near future they will provide binaries. Anyway, it’s a simple and single Go program compilation&lt;/li>
+&lt;li>VMware player / ovftool and both are included in the VMware player installer&lt;/li>
+&lt;/ul>
+&lt;h2 id="writing-the-configuration-file">Writing the Configuration File&lt;/h2>
+&lt;p>So the first step is to generate a valid &lt;a href="https://docs.flatcar-linux.org/container-linux-config-transpiler/doc/examples/">Container Linux Configuration&lt;/a> containing at least a user with an SSH key and the hostname of the VM. You can configure the VM with whatever is supported by the Configuration.&lt;/p>
+&lt;p>Let’s create a file called &lt;code>config.yaml&lt;/code>&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">users&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">core&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">ssh_authorized_keys&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="l">ssh-rsa AAAAB3NzaC1y...... user@springfield&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="w">&lt;/span>&lt;span class="nt">storage&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">files&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">path&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">/etc/hostname&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">filesystem&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">root&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">mode&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0644&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">contents&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">inline&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">homer&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">user&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">id&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">15&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">group&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">16&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">id&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="m">0&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The above code will be used when bootstraping Flatcar Linux to create/change the user &lt;code>core&lt;/code> to allow SSH authentication with the following SSH Public Key, and also write a file called &lt;code>/etc/hostname&lt;/code> containing the hostname of the machine. This file will be used by Flatcar CL to configure its hostname.&lt;/p>
+&lt;p>Please be aware this is a YAML, you should not copy/paste to not be punished by some missing space/tab :D&lt;/p>
+&lt;p>You can now ‘transpile’ this configuration and transform it into a JSON that will be used by Ingition when the VM is booting for the first time.&lt;/p>
+&lt;p>Running the command &lt;code>ct --in-file config.yaml --pretty&lt;/code> it shall output a prettified version of an ignition file:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;ignition&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;config&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;security&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="nt">&amp;#34;tls&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="nt">&amp;#34;timeouts&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="nt">&amp;#34;version&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;2.2.0&amp;#34;&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="nt">&amp;#34;networkd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nt">&amp;#34;passwd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="nt">&amp;#34;users&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="nt">&amp;#34;name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;core&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">15&lt;/span> &lt;span class="nt">&amp;#34;sshAuthorizedKeys&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">16&lt;/span> &lt;span class="s2">&amp;#34;ssh-rsa AAAAB3NzaC1y...... user@springfield&amp;#34;&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">19&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">20&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">21&lt;/span> &lt;span class="nt">&amp;#34;storage&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">22&lt;/span> &lt;span class="nt">&amp;#34;files&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">[&lt;/span>
+&lt;span class="ln">23&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">24&lt;/span> &lt;span class="nt">&amp;#34;filesystem&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">25&lt;/span> &lt;span class="nt">&amp;#34;group&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">26&lt;/span> &lt;span class="nt">&amp;#34;id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>
+&lt;span class="ln">27&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">28&lt;/span> &lt;span class="nt">&amp;#34;user&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">29&lt;/span> &lt;span class="nt">&amp;#34;id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">0&lt;/span>
+&lt;span class="ln">30&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">31&lt;/span> &lt;span class="nt">&amp;#34;path&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;/etc/hostname&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">32&lt;/span> &lt;span class="nt">&amp;#34;contents&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">33&lt;/span> &lt;span class="nt">&amp;#34;source&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="s2">&amp;#34;data:,homer&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">34&lt;/span> &lt;span class="nt">&amp;#34;verification&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln">35&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">36&lt;/span> &lt;span class="nt">&amp;#34;mode&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="mi">420&lt;/span>
+&lt;span class="ln">37&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">38&lt;/span> &lt;span class="p">]&lt;/span>
+&lt;span class="ln">39&lt;/span> &lt;span class="p">},&lt;/span>
+&lt;span class="ln">40&lt;/span> &lt;span class="nt">&amp;#34;systemd&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{}&lt;/span>
+&lt;span class="ln">41&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now you can grab this JSON and convert to base64 that will be read by Flatcar when booting. This does not need to be converted to base64, but the chance to have some bad character in the middle messing with your configuration will be reduced.&lt;/p>
+&lt;p>The full command is &lt;code>ct --in-file config.yaml --pretty |base64 -w0&lt;/code> but please BE AWARE that in MacOS/Darwin the base64 command does not have a -w0 flag, so you’ll need to sed/replace all the ending lines, turning the base64 into a full line without breaks, as the following:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
+&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="deploying-to-vmware-player">Deploying to VMware Player&lt;/h2>
+&lt;p>Well, assuming you’ve reached here with the correct base64 file created, containing the correct configuration for Flatcar Container Linux, now you just need to create the Virtual Machine using ovftool and it will be ready to be used.&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
+&lt;/span>&lt;span class="ln">2&lt;/span>&lt;span class="se">&lt;/span>--X:injectOvfEnv --name&lt;span class="o">=&lt;/span>flatcar --memorySize:&lt;span class="s1">&amp;#39;*&amp;#39;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">3072&lt;/span> &lt;span class="se">\
+&lt;/span>&lt;span class="ln">3&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data.encoding&lt;span class="o">=&lt;/span>base64 &lt;span class="se">\
+&lt;/span>&lt;span class="ln">4&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data&lt;span class="o">=&lt;/span>THE_GENERATED_BASE_64 &lt;span class="se">\
+&lt;/span>&lt;span class="ln">5&lt;/span>&lt;span class="se">&lt;/span>--net:&lt;span class="s2">&amp;#34;VM Network&amp;#34;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="s2">&amp;#34;NAT&amp;#34;&lt;/span> flatcar.ova newdir
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Some points in this command:&lt;/p>
+&lt;ul>
+&lt;li>As said, you don’t need to use a base64 config but will need also to remove the flag &lt;code>--extraConfig:guestinfo.coreos.config.data.encoding&lt;/code>&lt;/li>
+&lt;li>You need to replace the value in &lt;code>guestinfo.coreos.config.data&lt;/code> to the base64 generated in the previous step&lt;/li>
+&lt;li>You can use whatever network from VMware Player you want, if you want a bridge instead of a Nat just replace to &lt;code>--net:&amp;quot;VM Network&amp;quot;=&amp;quot;Bridge&amp;quot;&lt;/code>&lt;/li>
+&lt;li>If the newdir in the end of the command already exists it will just put the vmx from the machine inside that directory&lt;/li>
+&lt;li>The &lt;code>guestinfo.coreos.config.data&lt;/code> and &lt;code>guestinfo.coreos.config.data.encoding&lt;/code> are deprecated in favor of guestinfo.ignition.config.* but today this new key only works in Flatcar Alpha release.&lt;/li>
+&lt;li>ovftool cannot change the memory size. So even you&amp;rsquo;ve created your machine with the parameter &lt;code>--memorySize:&lt;/code> you&amp;rsquo;ll have to manually change the amount of memory directly in the generated vmx file&lt;/li>
+&lt;/ul>
+&lt;p>After that, the VM can be turned on with:&lt;/p>
+&lt;p>&lt;code>vmplayer newdir/flatcar/flatcar.vmx&lt;/code>&lt;/p>
+&lt;p>And voilá, you got a Flatcar Linux machine working.&lt;/p>
+&lt;p>Obviously you can grab the OVA and make the same deployment with Container Configuration in the VMPlayer GUI, but once automated this is much faster to create a farm of VMs for lab :)&lt;/p></description></item></channel></rss>

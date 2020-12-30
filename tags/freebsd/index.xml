@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>FreeBSD on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/freebsd/</link><description>Recent content in FreeBSD on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Wed, 30 Dec 2020 17:55:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/freebsd/index.xml" rel="self" type="application/rss+xml"/><item><title>Kubernetes Control Plane natively on FreeBSD with K3s</title><link>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</link><pubDate>Wed, 30 Dec 2020 17:55:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</guid><description>
+&lt;h2 id="introduction">Introduction&lt;/h2>
+&lt;p>I&amp;rsquo;ve been trying, on the past few days make Kubernetes usable on FreeBSD. Why? Some would say I like to suffer. Others would say I have much spare time.&lt;/p>
+&lt;p>To be honest, I&amp;rsquo;m doing this for fun. &lt;a href="https://www.freebsd.org">FreeBSD&lt;/a>, for me, is one of the most stable and performant Operating Systems, and it&amp;rsquo;s sad that we cannot
+use it to run Kubernetes components (yet).&lt;/p>
+&lt;p>In a near future, me and &lt;a href="twitter.com/fuzzykb">Karen Bruner&lt;/a> are planning to make not only the control plane usable, but also to use one of the precedents of containers on
+modern operating systems, even before Docker: &lt;a href="https://www.freebsd.org/doc/handbook/jails.html">Jails&lt;/a> as a &amp;ldquo;container runtime&amp;rdquo;.&lt;/p>
+&lt;p>I&amp;rsquo;m also using &lt;a href="https://k3s.io/">k3s&lt;/a> because I became too lazy to configure Kubernetes the hard way :P So bootstrapping an etcd, then the components was too much (for now)
+just to have some fun. But maybe some day, will do.&lt;/p>
+&lt;p>&lt;strong>Spoiler alert&lt;/strong>: All the main components of Kubernetes can be compiled for FreeBSD. An exception, right now is just &lt;a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/">kubelet&lt;/a>
+that have, in a method a wrong syscall to fetch the node boottime, but a &lt;a href="https://github.com/kubernetes/kubernetes/pull/97270">PR&lt;/a> was created to correct that.&lt;/p>
+&lt;h2 id="removing-code-before-compiling">Removing code before compiling&lt;/h2>
+&lt;p>So K3s is a AIO (all in one) binary that runs all the components necessary to make Kubernetes works. You can use Alex Ellis &lt;a href="https://github.com/alexellis/k3sup">k3sup&lt;/a>
+to bootstrap a Kubernetes cluster really, really fast.&lt;/p>
+&lt;p>Karen has also shown &lt;a href="https://productionwithscissors.run/2020/12/26/adventures-in-freebernetes-tutorial-build-your-own-bare-vm-k3s-cluster/">how to do this with FreeBSD&lt;/a> as a virtualization host + Linux machines running over bhyve (It&amp;rsquo;s a FreeBSD + bhyve + Linux + k3sup) and you should really check this!&lt;/p>
+&lt;p>But going back to the main subject: k3s does not natively compile for FreeBSD. And why this happens? Because it needs some components that can only be compiled on Linux (or Windows) to work.&lt;/p>
+&lt;p>As an example, it embeds &lt;a href="https://kubernetes.io/docs/reference/command-line-tools-reference/kube-proxy/">kube-proxy&lt;/a>. But, kube-proxy needs &lt;a href="https://en.wikipedia.org/wiki/Iptabl">iptables&lt;/a> and ipvs(&lt;a href="https://en.wikipedia.org/wiki/IP_Virtual_Server">https://en.wikipedia.org/wiki/IP_Virtual_Server&lt;/a>) to compile, which are Linux native technologies, not present on FreeBSD kernel.&lt;/p>
+&lt;p>The same happens with &lt;a href="https://github.com/coreos/flannel">flannel&lt;/a>, which is embedded in the code and used as the &lt;a href="https://github.com/containernetworking/cni">CNI&lt;/a>.&lt;/p>
+&lt;p>Fortunately, all of this code are present on a main package of k3s: &lt;strong>agent&lt;/strong>. But, we don&amp;rsquo;t need agent for our Control Plane, because agent is responsible for behaving like&amp;hellip;AN AGENT for k3s :D&lt;/p>
+&lt;p>So, moving on, you can see the necessary modifications to make k3s compile for FreeBSD here: &lt;a href="https://github.com/k3s-io/k3s/compare/v1.20.0+k3s2...rikatz:fbsd-control-plane">https://github.com/k3s-io/k3s/compare/v1.20.0+k3s2...rikatz:fbsd-control-plane&lt;/a>&lt;/p>
+&lt;p>Explaining:&lt;/p>
+&lt;ul>
+&lt;li>There are some files I hadn&amp;rsquo;t changed, but appear as difference because I&amp;rsquo;ve made all the mods from upstream branch&lt;/li>
+&lt;li>On the &lt;code>main.go&lt;/code> files (cmd/k3s/main.go and main.go) the call to &amp;ldquo;agent&amp;rdquo; packages is removed. The resulting binary wont have &amp;ldquo;agent&amp;rdquo; subcommand, but only &amp;ldquo;server&amp;rdquo;, &amp;ldquo;kubectl&amp;rdquo;, etc.&lt;/li>
+&lt;li>On &lt;code>pkg/cli/server/server.go&lt;/code> all the references for &lt;code>agent&lt;/code> and &lt;code>rootless&lt;/code> are removed. This way, we are not using anything from &lt;code>agent&lt;/code> package that can stop us from compiling!&lt;/li>
+&lt;li>On &lt;code>pkg/daemons/executor&lt;/code> interface, all the references for Kubelet and KubeProxy are removed. We&amp;rsquo;re running control plane, and as both of those components does not compile in FreeBSD, let&amp;rsquo;s get rid of them&lt;/li>
+&lt;li>On &lt;code>pkg/server/server.go&lt;/code> all the references for rootless/rootlessports are removed, because this package uses some native Linux calls to make rootless works (and we&amp;rsquo;re not running anything as a container anyway!)&lt;/li>
+&lt;/ul>
+&lt;p>There&amp;rsquo;s one more item to take note: On &lt;a href="https://github.com/rikatz/k3s/blob/fbsd-control-plane/pkg/cli/server/server.go#L47">server.go&lt;/a> k3s uses an artifact to masquerade its process to not expose some credential passed as an argument.&lt;/p>
+&lt;p>But the library used (gspt) uses some headers and some sort of CGO, so you can make two choices here:&lt;/p>
+&lt;ul>
+&lt;li>Remove the mentioned line (and the referenced library) and be aware someone using ps wwwaux can see your credentials&lt;/li>
+&lt;li>Keep the line, but compile on a FreeBSD machine (instead of using GOOS=freebsd on a Linux machine). Also, be aware that &lt;strong>WITH THIS OPTION K3S DOES NOT COMPILE FOR RPI3/ARM64&lt;/strong> (or maybe you need a rpi3 and compile there, which is plausible but I didn&amp;rsquo;t tried!)&lt;/li>
+&lt;/ul>
+&lt;p>One alternative here (and I need to check if this is possible) is to replace this to some syscall.&lt;/p>
+&lt;h2 id="compiling">Compiling&lt;/h2>
+&lt;p>So now that all the modifications have been explained, compiling is pretty easy:&lt;/p>
+&lt;ul>
+&lt;li>If you are on a Linux machine (and removed the gspt line mentioned above)&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>GOOS=freebsd go build -o k3s main.go
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>You can put also a GOARCH=arm64 together with GOOS=freebsd and compile it for RPi3&lt;/p>
+&lt;ul>
+&lt;li>If you are on a FreeBSD machine:&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>go build -o k3s main.go
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Aaaand that&amp;rsquo;s it!&lt;/p>
+&lt;h2 id="running">Running&lt;/h2>
+&lt;p>Well, so here we got a problem. K3s was built to run as a standalone AIO with embedded database (sqlite), or you can use an external database (postgres, mysql, etcd, etc).&lt;/p>
+&lt;p>But, it happens that sqlite is built with CGO, and because we don&amp;rsquo;t have it on FreeBSD the best option FOR ME was: install a default Postgres and make it run.&lt;/p>
+&lt;p>Here a side note: I didn&amp;rsquo;t put much effort on trying to make sqlite works, and instead I&amp;rsquo;ve directly jumped to Postgres because it was the easiest path. But, be my guest, and tell me what have you discovered!&lt;/p>
+&lt;p>Well, so, to make it run we need:&lt;/p>
+&lt;ul>
+&lt;li>A Postgres DB&lt;/li>
+&lt;li>The generated binary&lt;/li>
+&lt;/ul>
+&lt;p>Installing Postgres on FreeBSD is really, really simple but yes, you can run this on an external DB running on Linux, in some cloud, etc.&lt;/p>
+&lt;p>But let&amp;rsquo;s install this DB. Assuming you have a FreeBSD box working:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>pkg update
+&lt;span class="ln">2&lt;/span>pkg install postgresql12-server postgresql12-client
+&lt;span class="ln">3&lt;/span>sysrc postgresql_enable=yes
+&lt;span class="ln">4&lt;/span>/usr/local/etc/rc.d/postgresql initdb
+&lt;span class="ln">5&lt;/span>service postgresql start
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And that&amp;rsquo;s it for PostgreSQL. Obviously, this is a VERY INSECURE lab setup! Don&amp;rsquo;t run this (or anything in this tutorial, to be fair) in Production!&lt;/p>
+&lt;p>Well, with Postgres up and running, you can run k3s and your control plane will be magically bootstrapped:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>./k3s server --datastore-endpoint=postgres://postgres@127.0.0.1?sslmode=disable
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>This is going to print a lot of messages in your terminal, and now you have a Kubernetes Control Plane up and running natively on FreeBSD. Nice, right?&lt;/p>
+&lt;h2 id="testing">Testing&lt;/h2>
+&lt;p>Well, ok, the daemon is running but PROVE ME IT WORKS!&lt;/p>
+&lt;p>Okie, so first of all, you need somewhere to run a kubectl. You can run it on FreeBSD (it&amp;rsquo;s easy to compile! I promise!) but I wont go that way right now.&lt;/p>
+&lt;p>So, grab the kubeconfig you&amp;rsquo;re going to use on &lt;code>/var/lib/rancher/k3s/server/cred/admin.kubeconfig&lt;/code>, plus the referenced certificates in &lt;code>/var/lib/rancher/k3s/server/tls/client-*&lt;/code> and &lt;code>/var/lib/rancher/k3s/server/tls/server-ca.crt&lt;/code>, and copy them to another machine that kubectl is installed.&lt;/p>
+&lt;p>Edit the admin.kubeconfig file, changing:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>server: https://127.0.0.1:6444&lt;/code> -&amp;gt; &lt;code>server: https://fbsd-ip:6443&lt;/code>&lt;/li>
+&lt;li>&lt;code>certificate-authority&lt;/code>, &lt;code>client-certificate&lt;/code> and &lt;code>client-key&lt;/code> to point to certificates location. If they&amp;rsquo;re on the same directory as admin.kubeconfig, just remove the leading path and leave only the file name&lt;/li>
+&lt;/ul>
+&lt;p>Great! So now let&amp;rsquo;s check if kubectl can communicate with the server and what it brings to us:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig version
+&lt;span class="ln">2&lt;/span>Client Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.1&amp;#34;, GitCommit:&amp;#34;c4d752765b3bbac2237bf87cf0b1c2e307844666&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-18T12:09:25Z&amp;#34;, GoVersion:&amp;#34;go1.15.5&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;linux/amd64&amp;#34;}
+&lt;span class="ln">3&lt;/span>Server Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.0-k3s1&amp;#34;, GitCommit:&amp;#34;3559625e27197f60bcc39c4b3ecffc80bad7785e&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-08T20:42:55Z&amp;#34;, GoVersion:&amp;#34;go1.15.6&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;freebsd/amd64&amp;#34;}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>So if you take a look above, you&amp;rsquo;ll see that the Server Platform is: &lt;code>&amp;quot;freebsd/amd64&amp;quot;&lt;/code> (I&amp;rsquo;m running as a VM here in my machine!)&lt;/p>
+&lt;p>&amp;ldquo;Nah, but this is not enough! I wanna see some Kubernetes Nodes!&amp;rdquo; - Me, talking with myself!&lt;/p>
+&lt;p>OK, so let&amp;rsquo;s go. First, you need to install k3s binary on some Linux machine. Go ahead, and grab some &lt;a href="https://github.com/k3s-io/k3s#manual-download">release&lt;/a>&lt;/p>
+&lt;p>Nice, so now we need the token to join our agent/node with our Control Plane. It&amp;rsquo;s located on the Control Plane machine, so grab the token with:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>cat /var/lib/rancher/k3s/server/token
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>With that token copied, go back to your Linux machine that you&amp;rsquo;re going to run your node/agent and run:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo k3s agent --server https://fbsd-ip:6443 --token THE-TOKEN-YOU-TOOK-NOTE
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>After some time, your node will appear for the Control Plane. You can check this way:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig get nodes
+&lt;span class="ln">2&lt;/span>NAME STATUS ROLES AGE VERSION
+&lt;span class="ln">3&lt;/span>node123 Ready &amp;lt;none&amp;gt; 68m v1.20.0+k3s2
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Go ahead, run some Pods, be happy :D&lt;/p></description></item></channel></rss>

@@ -1,2 +1,165 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>xdp on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/xdp/</link><description>Recent content in xdp on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 01 Nov 2020 22:45:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/xdp/index.xml" rel="self" type="application/rss+xml"/><item><title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</title><link>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</link><pubDate>Sun, 01 Nov 2020 22:45:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</guid><description>Introduction In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.
-This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.</description></item></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>xdp on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/xdp/</link><description>Recent content in xdp on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 01 Nov 2020 22:45:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/xdp/index.xml" rel="self" type="application/rss+xml"/><item><title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</title><link>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</link><pubDate>Sun, 01 Nov 2020 22:45:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/</guid><description>
+&lt;h2 id="introduction">Introduction&lt;/h2>
+&lt;p>In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.&lt;/p>
+&lt;p>This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.&lt;/p>
+&lt;p>&lt;strong>Spoiler alert&lt;/strong>: As I’ve said in the previous article, I’m not a expert of eBPF, but a new learner. So expect mistakes, and provide me feedback! I do appreciate that!&lt;/p>
+&lt;h2 id="what-is-ebpf">What is eBPF&lt;/h2>
+&lt;p>The simplest definition I’ve seen somewhere is that eBPF is a way to run specific and confined programs within Linux Kernel, but without having to put code into the Kernel tree or developing modules.&lt;/p>
+&lt;p>Some articles define eBPF as a &amp;ldquo;Virtual Machine&amp;rdquo; (in the concept of isolation, not the VMs like KVM thing) that run programs triggered by some Kernel action.&lt;/p>
+&lt;p>As an example, imagine a system call that happens (like opening a file) and you want to trigger an action to count how many times that system call happens. Or a program that is triggered when a packet arrives on a specific network interface.&lt;/p>
+&lt;p>Because those programs are written in C (yeah, sorry!), compiled and attached to some part of your system, eBPF needs to count with some user space area to read and write dynamic data. This area is called map, and can be manipulated while the eBPF program runs.&lt;/p>
+&lt;p>So, for our examples, we’re going to write a really simple packet filter program, attach it to our network interface and see what and how it happens.&lt;/p>
+&lt;p>For some more detailed explanation of eBPF, I recommend the following readings:&lt;/p>
+&lt;ul>
+&lt;li>&lt;a href="https://docs.cilium.io/en/v1.8/bpf/">https://docs.cilium.io/en/v1.8/bpf/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://ebpf.io/what-is-ebpf">https://ebpf.io/what-is-ebpf&lt;/a>&lt;/li>
+&lt;/ul>
+&lt;h2 id="methodology">Methodology&lt;/h2>
+&lt;p>The methodology is going to be pretty much the same as the previous part of the article: write a program that logs and accept (or drop) a packet in port 12345, open a &lt;code>netcat&lt;/code> listening in this port and trigger the actions.&lt;/p>
+&lt;p>So for the sake of this article, the &lt;em>action&lt;/em> that is going to trigger our program is a packet arriving on the network interface, and the magic is going to happen there.&lt;/p>
+&lt;p>eBPF have at least two ways to deal with the packet filtering, like XDP, that I’m going to cover them now, and TC that I’ll cover in some other article&lt;/p>
+&lt;h2 id="xdp">XDP&lt;/h2>
+&lt;p>XDP, also known as eXpress Data Path is a specific eBPF program that runs close to the Network device. It’s run even before the packet can arrive at the kernel stack.&lt;/p>
+&lt;p>There are some network devices that support executing XDP programs directly, so yes, XDP is so powerful that you can process and take an action (like drop) a packet almost in the wire, without needing to overload your kernel.&lt;/p>
+&lt;p>Because such a low level processing is executed, we need to first have some understanding of how a network packet is composed, so let’s assume this is an Ethernet packet.&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/packet-dump.png" alt="A packet dump.">&lt;/p>
+&lt;p>Nice, so we’re mostly interested in the IP part (the source and destination address) and TCP part (Dst port 12345).&lt;/p>
+&lt;p>Hopefully there are some helper libraries that allow us to extract the part we’re interested in. I’ll not go through the situation &amp;ldquo;if this was an IPv6 IP packet&amp;rdquo;, but the program may be different.&lt;/p>
+&lt;p>I’m using &lt;a href="https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf">this nice article&lt;/a> as a reference to write my program, but will use a TCP packet instead of an UDP one.&lt;/p>
+&lt;p>So, to start this, we need to have clear that this is a program being run almost in the wire, so we’re receiving bytes. Those bytes are represented by XDP with a struct called &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3909-L3918">xdp_md&lt;/a> and contains all the necessary data encoded. In this struct you can see fields as &lt;code>data&lt;/code> (that represents the start of the packet), &lt;code>data_end&lt;/code> (that represents the end of the packet) and fields that represents which was the device that the packet arrive and leaves the machine (&lt;code>ingress_ifindex&lt;/code> and &lt;code>egress_ifindex&lt;/code>).&lt;/p>
+&lt;p>But as far as I know and some folks have stated to me, XDP only works with ingressing packets, so you cannot take an action in a packet leaving the machine, other than changing it’s attributes, like the destination IP.&lt;/p>
+&lt;p>Based on the &lt;a href="https://en.wikipedia.org/wiki/OSI_model">OSI Model&lt;/a> we will need to dissect the layer 2 (ethernet), shift to the layer 3 (the IP protocol) and then to the layer 4 (the TCP part) to get our information, so we’re going to code something like this to get our information:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-cpp" data-lang="cpp">&lt;span class="ln"> 1&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="nf">myxdpprog&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="nc">xdp_md&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Receiving the bytes in the pointer &amp;#34;ctx&amp;#34;
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data_end&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data_end&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">ethhdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 5&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span> &lt;span class="c1">// Assuming this is an Ethernet Frame
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">iphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="c1">// Populating the IP part
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="c1">&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">10&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">protocol&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">IPPROTO_TCP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">tcphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">);&lt;/span> &lt;span class="c1">// And then the TCP part
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="p">[...]&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>OK, great. So this is a bunch of uncontextualized C code, what does this mean? Exactly what is stated before: we receive the bytes, and dissect them all over as a IPv4 packet with TCP protocol.&lt;/p>
+&lt;p>Now that we have:&lt;/p>
+&lt;ul>
+&lt;li>An &lt;code>ip&lt;/code> variable containing a &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/ip.h#L86-L106">iphdr&lt;/a> struct that contains fields like source (&lt;code>saddr&lt;/code>) and destination (&lt;code>daddr&lt;/code>) IPv4 address&lt;/li>
+&lt;li>A &lt;code>tcp&lt;/code> variable containing a &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/tcp.h#L25-L27">tcphdr&lt;/a> with fields like the source (&lt;code>source&lt;/code>) and destination (&lt;code>dest&lt;/code>) port.&lt;/li>
+&lt;/ul>
+&lt;p>Putting all this together we will have a &amp;ldquo;simple&amp;rdquo; program like this:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-cpp" data-lang="cpp">&lt;span class="ln"> 1&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/bpf.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/if_ether.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/ip.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;linux/tcp.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;netinet/in.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="cp">#include&lt;/span> &lt;span class="cpf">&amp;lt;bpf_helpers.h&amp;gt;&lt;/span>&lt;span class="cp">
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="cp">&lt;/span>
+&lt;span class="ln"> 8&lt;/span>&lt;span class="cp">#define bpf_printk(fmt, ...) \
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="cp">({ \
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="cp"> char ____fmt[] = fmt; \
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="cp"> bpf_trace_printk(____fmt, sizeof(____fmt), \
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="cp"> ##__VA_ARGS__); \
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="cp">})
+&lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="cp">&lt;/span>
+&lt;span class="ln">15&lt;/span>&lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;xdpprogram&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="ln">16&lt;/span>&lt;span class="kt">int&lt;/span> &lt;span class="n">myxdpprogram&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="k">struct&lt;/span> &lt;span class="nc">xdp_md&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">data_end&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="p">)(&lt;/span>&lt;span class="kt">long&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ctx&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">data_end&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">19&lt;/span> &lt;span class="c1">// Dissecting the Ethernet Frame
+&lt;/span>&lt;span class="ln">20&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">ethhdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">21&lt;/span>
+&lt;span class="ln">22&lt;/span> &lt;span class="c1">// Does the size of the packet really fits as an Ethernet Frame
+&lt;/span>&lt;span class="ln">23&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">eth&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">24&lt;/span>
+&lt;span class="ln">25&lt;/span> &lt;span class="c1">// Dissecting the IPv4 part
+&lt;/span>&lt;span class="ln">26&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">iphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="n">data&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">eth&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">27&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">28&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">protocol&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">IPPROTO_TCP&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">29&lt;/span>
+&lt;span class="ln">30&lt;/span> &lt;span class="c1">// Dissecting the TCP part of the program
+&lt;/span>&lt;span class="ln">31&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">struct&lt;/span> &lt;span class="nc">tcphdr&lt;/span> &lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">ip&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">ip&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">32&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">((&lt;/span>&lt;span class="kt">void&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="p">)&lt;/span>&lt;span class="n">tcp&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="k">sizeof&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="o">*&lt;/span>&lt;span class="n">tcp&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">&amp;lt;=&lt;/span> &lt;span class="n">data_end&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">33&lt;/span>
+&lt;span class="ln">34&lt;/span> &lt;span class="c1">// And now we can see if this is port 12345 :)
+&lt;/span>&lt;span class="ln">35&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="n">tcp&lt;/span>&lt;span class="o">-&amp;gt;&lt;/span>&lt;span class="n">dest&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="n">ntohs&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">12345&lt;/span>&lt;span class="p">))&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">36&lt;/span> &lt;span class="n">bpf_printk&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;XDP drop on TCP port 12345&lt;/span>&lt;span class="se">\n&lt;/span>&lt;span class="s">&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">37&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="n">XDP_DROP&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">38&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">39&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">40&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">41&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">42&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">43&lt;/span> &lt;span class="c1">// Take a default action
+&lt;/span>&lt;span class="ln">44&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="n">XDP_PASS&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">45&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">46&lt;/span>
+&lt;span class="ln">47&lt;/span>&lt;span class="kt">char&lt;/span> &lt;span class="n">_license&lt;/span>&lt;span class="p">[]&lt;/span> &lt;span class="n">SEC&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s">&amp;#34;license&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s">&amp;#34;GPL&amp;#34;&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Wow wait! What is this all about?&lt;/p>
+&lt;p>OK, so first of all, eBPF programs should ALWAYS return from the function, otherwise they won’t compile. XDP programs have some &lt;a href="https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3898-L3904">actions&lt;/a> that can be taken:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>XDP_DROP&lt;/code> - Drops the packet&lt;/li>
+&lt;li>&lt;code>XDP_PASS&lt;/code> - Pass the packet&lt;/li>
+&lt;li>&lt;code>XDP_TX&lt;/code> - Returns the packet to the interface that received it&lt;/li>
+&lt;li>&lt;code>XDP_REDIRECT&lt;/code> - Redirect the packet to another interface&lt;/li>
+&lt;li>&lt;code>XDP_ABORTED&lt;/code> - An error in the application happened, and the packet is also dropped.&lt;/li>
+&lt;/ul>
+&lt;p>Also, remember the code runs as a Kernel program? This way, we cannot simply log with a printf call. Instead we need to log as a kernel program and this is what the call of &lt;code>bpf_printk&lt;/code> does. This is a macro defined in the top of the file, and which calls &lt;code>bpf_trace_printk&lt;/code> that is provided by the header &amp;ldquo;&amp;lt;bpf_helpers.h&amp;gt;&amp;rdquo; which is part of libbpf and will be shown further.&lt;/p>
+&lt;p>The &lt;code>SEC&lt;/code> directive is a macro that defines the program name that the &amp;ldquo;ip command&amp;rdquo; (you’ll see it later) looks to load into the device. You can have multiple programs in the same source code, this way you need to name them.&lt;/p>
+&lt;p>Also, we need to convert the integer &amp;ldquo;12345&amp;rdquo; to something that represents the port in the packet, so the function &lt;a href="https://linux.die.net/man/3/ntohs">ntohs&lt;/a> is used. This is provided by the header &amp;ldquo;netinet/in.h&amp;rdquo;.&lt;/p>
+&lt;p>Finally, because we’re using the helpers functions, the license of the program MUST BE GPL, so the last line defines that.&lt;/p>
+&lt;h2 id="compiling-and-loading-everything">Compiling and loading everything&lt;/h2>
+&lt;p>OK, so we have our program. How can we use it? It needs to be compiled with and loaded in the device that is going to deal with the packets.&lt;/p>
+&lt;p>There’s a bunch of ways of doing this, I’ll try to keep it simple.&lt;/p>
+&lt;p>First of all, you need to install all the necessary tools to compile the program. You can find the dependencies for a good number of distros &lt;a href="https://github.com/xdp-project/xdp-tutorial/blob/master/setup_dependencies.org">here&lt;/a>. In my case, I’m using an Ubuntu Server for the tests so:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>sudo apt install clang llvm libelf-dev libpcap-dev gcc-multilib build-essential linux-tools-common linux-tools-generic
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Also you’ll need to download libbpf:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>git clone https://github.com/libbpf/libbpf.git
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now, to compile the program, considering it&amp;rsquo;s source is called &lt;code>drop12345.c&lt;/code>, simple do:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>clang -Ilibbpf/src -O2 -target bpf -c drop12345.c -o drop12345.o
+&lt;/code>&lt;/pre>&lt;/div>&lt;blockquote>
+&lt;p>&lt;em>NOTE&lt;/em>: Please be aware, I don’t know if this is the safer way to compile the program, as this is an EXAMPLE!!&lt;/p>
+&lt;/blockquote>
+&lt;blockquote>
+&lt;p>&lt;em>NOTE2&lt;/em>: If you have errors compiling, make sure the -I argument is pointing to the libbpf/src directory, and also that you’re using the right libraries in the &amp;ldquo;include&amp;rdquo; directives on the C code. Also that you have all the linux kernel headers file installed :)&lt;/p>
+&lt;/blockquote>
+&lt;p>And voilà! You have an object called &amp;ldquo;drop12345.o&amp;rdquo; that can be loaded in your network device.&lt;/p>
+&lt;p>So let’s do it (remember to replace &lt;code>ens33&lt;/code> with the name of your device)&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ip link set dev ens33 xdp obj drop12345.o sec xdpprogram
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now you can try to connect to the port 12345 of your host, and see the logs with:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo cat /sys/kernel/debug/tracing/trace_pipe
+&lt;span class="ln">2&lt;/span> &amp;lt;idle&amp;gt;-0 [001] ..s. 6541.153908: 0: XDP drop on TCP port 12345
+&lt;span class="ln">3&lt;/span>[...]
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>If you need to unload the program, simple do:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ip link set dev ens33 xdp off
+&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="and-where-is-xdp-positioned">And where is XDP positioned?&lt;/h2>
+&lt;p>So remember when I said earlier that the XDP programs are executed before the packet can have a chance to reach the rest of kernel stack?&lt;/p>
+&lt;p>In the previous article, we’ve seen that nftables is positioned before iptables when dealing with filtering, so let’s load our previous nftables ruleset, and see if the packet is logged by XDP or by nftables:&lt;/p>
+&lt;p>Before loading the XDP program, we can see by the timestamp that nftables is dropping the packet:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>[ 6976.808976] nft-inputIN=ens33 SRC=192.168.86.1 DST=192.168.86.128 DPT=12345
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>But then, when the xdp program is loaded, no further log appears in nftables stack, but take a look at the timestamp of the following message:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>7237.743455: 0: XDP drop on TCP port 12345
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>To confirm:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/mixpacketfilter/input-xdp.png" alt="The input flow with XDP.">&lt;/p>
+&lt;p>I’m not going to make the Output test, as it’s stated that XDP is only for incoming packets. But I can try to take further tests in some later article :)&lt;/p>
+&lt;h2 id="final-thoughts-and-next-steps">Final Thoughts and next steps&lt;/h2>
+&lt;p>Right now the program is simple and static, so if you need to dynamic update it you need to change the code and recompile it. eBPF can use a structure called &lt;code>map&lt;/code>, which can be used to &amp;ldquo;trade&amp;rdquo; informations between the running program and userspace, as an example dinamically feeding a program with IPs that should be blocked.&lt;/p>
+&lt;p>&lt;em>In my opinion&lt;/em>, the biggest issue when using eBPF is to know exactly what is being executed, as this is a static compiled program. One can compile and attach it to a network interface and if you don’t have the source code, you won’t know what is happening, while with IPTables and NFTables you can simply dump the rules.&lt;/p>
+&lt;p>A tool called &lt;code>bpftool&lt;/code> can be used to show you things like &amp;ldquo;What program is loaded in which part of the system&amp;rdquo;, like XDP or TC (that will be covered in the next post), but still, you only know where, but not what. There was an effort to create a program called &amp;ldquo;bpfilter&amp;rdquo;, but it seems to be frozen right now.&lt;/p>
+&lt;p>Finally, XDP is not the only way that you can use eBPF programs to make packet filtering in Linux and in the next article I will cover how eBPF + TC programs works :)&lt;/p>
+&lt;p>Thank you for reading this, I expect to clarify a little bit this new world (also for me!) of eBPF stuff :)&lt;/p>
+&lt;p>And thanks for all the hard work the community has been doing making eBPF a great new technology, and also documenting! The next section have some nice references that I’ve used, but there’s a lot more materials, posts, etc.&lt;/p>
+&lt;h2 id="references">References:&lt;/h2>
+&lt;ul>
+&lt;li>&lt;a href="https://ebpf.io">https://ebpf.io&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html">https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html">https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf">https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://github.com/xdp-project/xdp-tutorial/">https://github.com/xdp-project/xdp-tutorial/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://ebpf.io">https://ebpf.io&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263">https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf">https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/">https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/&lt;/a>&lt;/li>
+&lt;li>&lt;a href="https://docs.cilium.io/en/v1.8/bpf/">https://docs.cilium.io/en/v1.8/bpf/&lt;/a>&lt;/li>
+&lt;/ul></description></item></channel></rss>
