@@ -56,13 +56,13 @@ As regras podem conter também outros campos não explicados aqui (exceções, t
 
 Antes de começar a instalar o Falco, apenas uma descrição de meu ambiente:
 
-* 3 servidores virtuais com o [Flatcar Linux](https://kinvolk.io/flatcar-container-linux/) 2765.2.2, porque EU GOSTO MUITO DO MODELO DO FLATCAR!! (fora que ele já tem um Kernel mais moderno e usar o Falco no modo eBPF simplesmente funciona!!). Se você quiser aprender a instalar o Flatcar em 5 minutos no VMware Player, tem um outro artigo explicando aqui no blog.
+* 3 servidores virtuais com o [Flatcar Linux](https://kinvolk.io/flatcar-container-linux/) 2765.2.2, porque EU GOSTO MUITO DO MODELO DO FLATCAR!! (fora que ele já tem um Kernel mais moderno e usar o Falco no modo eBPF simplesmente funciona!!). Se você quiser aprender a instalar o Flatcar em 5 minutos no VMware Player, tem um outro artigo explicando [aqui](/pt/post/2020-09-13-flatcar/) no blog.
 * Meus servidores e minha rede aqui em casa são `192.168.0.0/24`
 * Meu Kubernetes é o v1.21.0, instalado via Kubeadm. Os pods são criados na rede `172.16.0.0/16`
 
-Para instalar o Falco no Kubernetes, basicamente são 4 passos (claro que você pode alterar, eu segui assim para demonstrar aqui):
+Para instalar o Falco no Kubernetes usando o [helm](http://helm.sh), basicamente são 4 passos (claro que você pode alterar, eu segui assim para demonstrar aqui):
 
-```bash=
+```bash
 kubectl create ns falco # Eu quero rodar em outro namespace
 helm repo add falcosecurity https://falcosecurity.github.io/charts
 helm repo update
@@ -77,13 +77,13 @@ Na instalação acima, eu habilitei também o [sidekick](https://github.com/falc
 
 O Falco vem com algumas regras por padrão. Por exemplo, à partir do momento que ele está em execução, se você tentar dar um `kubectl exec -it` em um Pod, ele irá gerar um alerta:
 
-```shell=zsh
-controlplane #  kubectl exec -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
+```shell
+kubectl exec -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
 root@nginx-6799fc88d8-996gz:/#
 ```
 
 E nos logs do Falco (eu dei uma melhorada nesse JSON!):
-```json=
+```json
 {
     "output":"14:23:15.139384666: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2 shell=bash parent=runc cmdline=bash terminal=34816 container_id=3db00b476ee2 image=nginx) k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2",
     "priority":"Notice",
@@ -111,7 +111,7 @@ Você pode ver nesse log, por exemplo que além da mensagem no output, alguns ca
 Como eu falei, o Falco consegue monitorar as chamadas em syscall. Uma syscall de conexão de rede é do tipo 'connect', e sendo assim, podemos criar uma regra básica para o Falco que sempre gere uma notificação quando algum container tentar conectar-se a algum ativo externo a ele. 
 
 O Falco vem com uma macro e uma lista pré definida para conexões que saiam de rede assim:
-```
+```yaml
 # RFC1918 addresses were assigned for private network usage
 - list: rfc_1918_addresses
   items: ['"10.0.0.0/8"', '"172.16.0.0/12"', '"192.168.0.0/16"']
@@ -127,17 +127,17 @@ O Falco vem com uma macro e uma lista pré definida para conexões que saiam de 
 ```
 
 Essa Macro:
-* Verifica se é um evento do tipo connect (conexão de rede) do tipo saída (evt.dir=<)
+* Verifica se é um evento do tipo connect (conexão de rede) do tipo saída (`evt.dir=<`)
 * OU se é um evento do tipo sendto, sendmsg (conexão via socket de arquivo) do tipo saída, que o protocólo não seja TCP, o filedescriptor não esteja conectado e o nome mude, tipicamente de conexões UDP
 * Caso alguma das condições acima seja verdadeira, e o tipo do file descriptor seja 4 ou 6 (IPv4 ou IPv6)
-* E o IP não seja igual a 0.0.0.0 E a rede não seja igual a 127.0.0.0/8 (conexão ao localhost) E a rede de destino (fd.snet) não esteja na lista `rfc_1918_addresses`
+* E o IP não seja igual a 0.0.0.0 E a rede não seja igual a 127.0.0.0/8 (conexão ao localhost) E a rede de destino (`fd.snet`) não esteja na lista `rfc_1918_addresses`
 * E o evento tenha retorno maior que zero ou esteja 'Em andamento'
 
 Difícil? Na verdade, jogue essa expressão no vscode, e vá trabalhando ela através da abertura e fechamento de parenteses. Todos os campos existentes aqui estão muito bem explicados em [Campos suportados](https://falco.org/docs/rules/supported-fields)
 
 Porém, a macro acima não nos atende, pois filtra a saída para redes internas (rfc1918), o que é o caso da maioria das empresas. Vamos definir então o nosso conjunto macro/regra:
 
-```
+```yaml
 - macro: outbound_corp
   condition: >
     (((evt.type = connect and evt.dir=<) or
@@ -152,7 +152,7 @@ Porém, a macro acima não nos atende, pois filtra a saída para redes internas 
   
 - rule: kubernetes outbound connection
   desc: A pod in namespace attempted to connect to the outer world
-  condition: outbound_corp and k8s.ns.name != "" and k8s.ns.name != "falco" and not k8s.ns.label.network in (k8s_not_monitored)
+  condition: outbound_corp and k8s.ns.name != "" and not k8s.ns.label.network in (k8s_not_monitored)
   output: "Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc.name)"
   priority: WARNING
 ```
@@ -161,7 +161,7 @@ A regra acima:
 * Cria uma macro `outbound_corp` para qualquer conexão saindo
 * Cria uma lista `k8s_not_monitored` com os valores `blue` e `green`
 * Cria uma regra que verifica:
-  * Se é tráfego saindo (`outbound`)
+  * Se é tráfego saindo definido na macro `outbound_corp`
   * E se tem o campo k8s.ns.name definido (o que significa que está executando dentro do Kubernetes)
   * E se o namespace NÃO TEM uma label chamada `network` com algum dos valores que está na lista `k8s_not_monitored`. Se tiver, o tráfego não será monitorado
 
@@ -181,25 +181,26 @@ kubectl get cm -n falco falco -o yaml > falcoorig.yaml
 cp falcoorig.yaml falco.yaml
 ```
 
-Agora, dentro desse configmap vamos editar o arquivo falco_rules.local.yaml (e apenas ele!) para adicionarmos nosso novo conjunto de regras definido acima.
+Agora, dentro desse arquivo de configuração (`falco.yaml`) vamos editar o campo `falco_rules.local.yaml` (e apenas ele!) para adicionarmos nosso novo conjunto de regras definido acima.
 
 **Obs**: Com certeza existe algum jeito menos idiota de fazer isso, se você souber como, me chama no twitter e fala como seria um patch nesse ConfigMap aí só com o `falco_rules.local.yaml`
 
 Depois de editar o falco.yaml, basta reaplicar o ConfigMap e apagar todos os Pods do Falco, que serão re-criados:
 
-```
-kubectl replace -n falco -f falco.yaml
+```shell
+kubectl delete -n falco -f falco.yaml
+kubectl create -n falco -f falco.yaml
 sleep 2
 kubectl delete pod -n falco -l app=falco
 ```
 
-Se o Pod estiver em status de Error, veja o log deles que podem indicar alguma falha na regra.
+Se o Pod estiver em status de `Error`, veja o log deles que podem indicar alguma falha na regra (lembre-se, é um YAML, erros com espaços acontecem MUITO!)
 
 ## Mostre-me os Logs!!
 
 Executando um `kubectl logs -n falco -l app=falco` veremos que nossos logs já estão aparecendo:
 
-```
+```json
 {
     "output":"18:05:13.045457220: Warning Outbound network traffic connection from a Pod: (pod=falco-l8xmm namespace=falco srcip=192.168.0.150 dstip=192.168.0.11 dstport=2801 proto=tcp procname=falco) k8s.ns=falco k8s.pod=falco-l8xmm container=cb86ca8afdaa",
     "priority":"Warning",
@@ -218,15 +219,15 @@ Executando um `kubectl logs -n falco -l app=falco` veremos que nossos logs já e
     }
 }
 ```
-Mas esses são os Logs do próprio Falco, que não nos interessam. Vamos então marcar o namespace dele com a label 'green' e ele irá parar de gerar logs do tráfego dos Pods do Falco:
+Mas esses são os Logs do próprio Falco, que não nos interessam. Vamos então marcar o namespace com a label que fará parar de gerar logs do tráfego dos Pods do Falco:
 
-```
+```shell
 kubectl label ns falco network=green
 ```
 
-Show, agora que os Pods do Falco não entram nos logs de monitoração, vamos fazer uns testes :D Para isso eu criei um namespace chamado `testkatz` com alguns Pods dentro, e irei gerar logs:
+Show, agora que os Pods do Falco não entram nos logs de monitoração, vamos fazer uns testes :D Para isso eu criei um namespace chamado `testkatz` com alguns Pods dentro, e irei gerar um pouco de tráfego de saída:
 
-```
+```log
 "output":"18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
 =====
 "output":"18:11:04.406290360: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=172.217.30.164 dstport=80 proto=tcp procname=curl)
@@ -236,16 +237,14 @@ No log acima, podemos ver a chamada ao DNS, e em seguida a chamada ao servidor d
 
 ## Visualizando de forma melhorada
 
-Ninguém merece ficar vendo logs JSON rodando na tela, certo? E se eu quisesse gerar alertas desses logs, por exemplo?
+Ninguém merece ficar vendo logs JSON rodando na tela, certo? Entra em ação aqui o Falco Sidekick. Ele foi instalado no começo, então a configuração que precisamos fazer é para que ele envie esses "alertas" para algum lugar desejado.
 
-Entra em ação aqui o falcosidekick. Ele foi instalado no começo, então a configuração que precisamos fazer é para que ele envie esses "alertas" para algum lugar que gere uma visualização melhorada.
-
-O sidekick por padrão vem com uma interface Web, que pode ser acessada via port-forward, por exemplo:
-```
+O sidekick vem com uma interface Web, que pode ser acessada via port-forward, por exemplo:
+```shell
 kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj 2802
 ```
 
-Após isso, basta acessar o browser local e você terá algo tão legal quanto:
+Após isso, basta acessar o browser local através do endereço [http://localhost:2802/ui] e você terá algo tão legal quanto:
 
 ![Sidekick Dashboard](/images/falcomonitoring/sidekick1.png)
 
@@ -253,13 +252,13 @@ Após isso, basta acessar o browser local e você terá algo tão legal quanto:
 
 Mas isso não gera retenção. Vamos então configurar o Sidekick para apontar para um Grafana Loki. Pode-se usar o freetier do Grafana Cloud, por exemplo. Gere um hash base64 da URL do Loki, conforme a seguir:
 
-```
+```shell
 echo -n "https://USER:APIKEY@logs-prod-us-central1.grafana.net" |base64 -w0
 ```
 
-Com o hash base64 gerado, adicione ele na secret falco/falcosidekick na linha `LOKI_HOSTPORT`
+Com o hash base64 gerado, adicione ele na secret `falco/falcosidekick` na linha `LOKI_HOSTPORT`
 
-Por fim, reinicie o sidekick com `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` e então você passará a ver mensagens `[INFO]  : Loki - Post OK (204)` cada vez que uma nova mensagem for postada.
+Por fim, reinicie o sidekick com `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` e então você passará a ver mensagens `[INFO]  : Loki - Post OK (204)` no log do sidekick cada vez que um alerta for disparado.
 
 Com isso, no Grafana Cloud você conseguirá ter um dashboard parecido com o que mostrei acima :)
 
