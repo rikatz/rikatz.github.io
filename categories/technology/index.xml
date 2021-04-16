@@ -1,4 +1,173 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Technology on The Katz Experiments</title><link>https://www.rkatz.xyz/categories/technology/</link><description>Recent content in Technology on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Wed, 30 Dec 2020 17:55:19 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/categories/technology/index.xml" rel="self" type="application/rss+xml"/><item><title>Kubernetes Control Plane natively on FreeBSD with K3s</title><link>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</link><pubDate>Wed, 30 Dec 2020 17:55:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</guid><description>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Technology on The Katz Experiments</title><link>https://www.rkatz.xyz/categories/technology/</link><description>Recent content in Technology on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Fri, 16 Apr 2021 16:32:27 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/categories/technology/index.xml" rel="self" type="application/rss+xml"/><item><title>Using Falco to monitor outbound traffic for Pods in Kubernetes</title><link>https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/</link><pubDate>Fri, 16 Apr 2021 16:32:27 -0300</pubDate><guid>https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/</guid><description>
+&lt;h1 id="using-falco-to-monitor-outbound-traffic-for-pods-in-kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes&lt;/h1>
+&lt;p>&lt;a href="https://www.falco.org">Falco&lt;/a> is an opensource project from &lt;a href="https://sysdig.com/">Sysdig&lt;/a> focused on container runtime and cloud native security, that uses modern technologies like &lt;a href="https://ebpf.io">eBPF&lt;/a> to monitor environment situations using &lt;a href="https://man7.org/linux/man-pages/man2/syscalls.2.html">syscalls&lt;/a> and other &lt;a href="https://falco.org/docs/event-sources/">events sources&lt;/a>&lt;/p>
+&lt;p>We&amp;rsquo;ve used Falco some time ago as a PoC to monitor some specific events, and recently I&amp;rsquo;ve started to mess with it a bit to help contributing on it as a request from the amazing &lt;a href="https://twitter.com/danpopnyc/">Dan Pop&lt;/a> and also to understand better how Falco could help me in future situations.&lt;/p>
+&lt;h2 id="the-problem-i-needed-to-solve">The problem I needed to solve&lt;/h2>
+&lt;p>Who uses Kubernetes knows how hard is to keep track of networking connections originated from Pods. Even using &lt;a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/">Network Policies&lt;/a>, it&amp;rsquo;s hard to assess which Pod tried to open a connection to internal or external world.&lt;/p>
+&lt;p>Having this kind of information is essential in environments with a higher restriction level, or even if you need to legally answer &amp;ldquo;who was connecting to this network endpoint&amp;rdquo;.&lt;/p>
+&lt;p>Some CNI providers have specific solutions, like &lt;a href="https://antrea.io">Antrea&lt;/a> exporting via &lt;a href="https://antrea.io/docs/v1.0.0/network-flow-visibility/">Netflow&lt;/a>, or &lt;a href="https://cilium.io/">Cilium&lt;/a> with a short retention solution and visualization with project &lt;a href="https://github.com/cilium/hubble">Hubble&lt;/a>.&lt;/p>
+&lt;p>But I wanted something more: I wanted a solution that could be applied with any CNI, even if it does not support Network Policy. I don&amp;rsquo;t care if the connection was dropped or not, I wanted to know how to monitor every connection attempt my Pods does. And this can be monitored, as every connection generates a syscall.&lt;/p>
+&lt;h2 id="the-final-result">The final result&lt;/h2>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/grafana.png" alt="Final result">&lt;/p>
+&lt;h2 id="let-me-introduce-you-falco">Let me introduce you Falco!&lt;/h2>
+&lt;p>As I&amp;rsquo;ve explained before, Falco is an opensource project that monitors events in servers. Those events can be syscalls from containers, or even Kubernetes audit events.&lt;/p>
+&lt;p>Falco is based in &lt;a href="https://falco.org/docs/rules/">rules&lt;/a>. Those rules mainly define:&lt;/p>
+&lt;ul>
+&lt;li>a common &lt;strong>name&lt;/strong> (&lt;code>rule&lt;/code>) - &amp;ldquo;Unauthorized SSH access&amp;rdquo;&lt;/li>
+&lt;li>a &lt;strong>description&lt;/strong> (&lt;code>desc&lt;/code>) - &amp;ldquo;Some user attempted to login in an SSH service&amp;rdquo;&lt;/li>
+&lt;li>a &lt;strong>priority&lt;/strong> (&lt;code>priority&lt;/code>) - &amp;ldquo;WARNING&amp;rdquo;&lt;/li>
+&lt;li>a &lt;strong>detailed output&lt;/strong> from the event (&lt;code>output&lt;/code>) - &amp;ldquo;Server &amp;lsquo;homer&amp;rsquo; received a connectin in port 22 from the non authorized IP 192.168.0.123&amp;rdquo;&lt;/li>
+&lt;li>a &lt;strong>condition&lt;/strong> (&lt;code>cond&lt;/code>) - &amp;ldquo;(Server has the word &amp;lsquo;restricted&amp;rsquo; in the hostname, and receives a connection in port 22 from a source that is not network 10.10.10.0/24) OR (server received a connection in port 22 mas the process that received this connection is not called &amp;lsquo;sshd&amp;rsquo;)&lt;/li>
+&lt;/ul>
+&lt;p>Here, I need to point something: I wrote the condition field above in a really simple form, as a common language. Besides Falco rules not being written exactly in this form (as we will see below), it&amp;rsquo;s a really similar format, making it easier to read the rules.&lt;/p>
+&lt;p>The rules can also contain other fields not explained here, like exceptions, aditional tags, and also &lt;strong>lists&lt;/strong> and &lt;strong>macros&lt;/strong> that turns repetition of strings easier.&lt;/p>
+&lt;h2 id="installing-falco">Installing Falco&lt;/h2>
+&lt;p>Before we begin to install Falco, a brief description of my environment:&lt;/p>
+&lt;ul>
+&lt;li>3 virtual servers with &lt;a href="https://kinvolk.io/flatcar-container-linux/">Flatcar Linux&lt;/a> 2765.2.2, because I LOVE FLATCAR MODEL!! (and also it has an up to date Kernel, which allows me to use Falco eBPF driver). If you want to learn how to install Flatcar in 5 minutes using VMware Player, there&amp;rsquo;s a blog post &lt;a href="https://www.rkatz.xyz/post/2020-09-13-flatcar/">here&lt;/a> explaining how.&lt;/li>
+&lt;li>My physical networking is &lt;code>192.168.0.0/24&lt;/code>&lt;/li>
+&lt;li>My Kubernetes install is v1.21.0 via Kubeadm. Pods are creted in network &lt;code>172.16.0.0/16&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>To install Falco on Kubernetes using &lt;a href="http://helm.sh">helm&lt;/a>, basically you need to follow 4 steps:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>kubectl create ns falco
+&lt;span class="ln">2&lt;/span>helm repo add falcosecurity https://falcosecurity.github.io/charts
+&lt;span class="ln">3&lt;/span>helm repo update
+&lt;span class="ln">4&lt;/span>helm install falco falcosecurity/falco --namespace falco --set falcosidekick.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.webui.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set ebpf.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>After that, you just need to verify if all Pods in namespace &lt;code>falco&lt;/code> are running, with &lt;code>kubectl get pods -n falco&lt;/code>&lt;/p>
+&lt;p>With this install, I&amp;rsquo;ve also enabled &lt;a href="https://github.com/falcosecurity/falcosidekick">sidekick&lt;/a> which is a really cool project that exports Falco events to a bunch of outputs, and also allows you to visualize them in its own interface&lt;/p>
+&lt;h2 id="creating-and-visualizing-alerts">Creating and visualizing alerts&lt;/h2>
+&lt;p>Falco has some default rules. As an example, as soon as it is executing, if you issue a &lt;code>kubectl exec -it&lt;/code> to a Pod, it will generate some alert:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl &lt;span class="nb">exec&lt;/span> -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
+&lt;span class="ln">2&lt;/span>root@nginx-6799fc88d8-996gz:/#
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And in Falco logs (I&amp;rsquo;ve made this JSON clearer, but it&amp;rsquo;s a one liner)&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;14:23:15.139384666: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2 shell=bash parent=runc cmdline=bash terminal=34816 container_id=3db00b476ee2 image=nginx) k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Notice&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Terminal shell in container&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="nt">&amp;#34;time&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;2021-04-16T14:23:15.139384666Z&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="nt">&amp;#34;output_fields&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="nt">&amp;#34;container.id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;3db00b476ee2&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="nt">&amp;#34;container.image.repository&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;nginx&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="nt">&amp;#34;evt.time&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1618582995139384666&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="nt">&amp;#34;k8s.ns.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;testkatz&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nt">&amp;#34;k8s.pod.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;nginx-6799fc88d8-996gz&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="nt">&amp;#34;proc.cmdline&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;bash&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="nt">&amp;#34;proc.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;bash&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="nt">&amp;#34;proc.pname&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;runc&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">15&lt;/span> &lt;span class="nt">&amp;#34;proc.tty&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">34816&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">16&lt;/span> &lt;span class="nt">&amp;#34;user.loginuid&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">-1&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="nt">&amp;#34;user.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;root&amp;#34;&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">19&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>In this log you can check that besides the output message, some additional fields are mapped, like the process name, the namespace and the pod name. We will explore this further.&lt;/p>
+&lt;h2 id="creating-rules-for-falco">Creating rules for Falco&lt;/h2>
+&lt;p>Falco can monitor syscalls. A syscall of a network connection is of the &amp;lsquo;connect&amp;rsquo; type, and this way, we can create a basic rule so Falco can always generate a notification when some container tries to connect to the outside world.&lt;/p>
+&lt;p>Falco already comes with a pre defined list and macro for outbound connections:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="c"># RFC1918 addresses were assigned for private network usage&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">list&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">rfc_1918_addresses&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">items&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;10.0.0.0/8&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;172.16.0.0/12&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;192.168.0.0/16&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">condition&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">&amp;gt;&lt;/span>&lt;span class="sd">
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="sd"> (((evt.type = connect and evt.dir=&amp;lt;) or
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="sd"> (evt.type in (sendto,sendmsg) and evt.dir=&amp;lt; and
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="sd"> fd.l4proto != tcp and fd.connected=false and fd.name_changed=true)) and
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="sd"> (fd.typechar = 4 or fd.typechar = 6) and
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="sd"> (fd.ip != &amp;#34;0.0.0.0&amp;#34; and fd.net != &amp;#34;127.0.0.0/8&amp;#34; and not fd.snet in (rfc_1918_addresses)) and
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="sd"> (evt.rawres &amp;gt;= 0 or evt.res = EINPROGRESS))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>This macro:&lt;/p>
+&lt;ul>
+&lt;li>Verifies if the event is of type connect (network connection) and it&amp;rsquo;s outbound (&lt;code>evt.dir=&amp;lt;&lt;/code>)&lt;/li>
+&lt;li>OR if this is a sendto or sendmsg type going outbound, which protocol is not TCP and the file descriptor is not connected, and the name does not change, tipically an UDP connection.&lt;/li>
+&lt;li>If any of the conditions above are true AND the file descriptor is 4 or 6, which represents IPv4 or IPv6&lt;/li>
+&lt;li>AND the IP is not equal to 0.0.0.0 AND the network is not equal to 127.0.0.0/8 (localhost) AND the destination network (&lt;code>fd.snet&lt;/code>) is not in list &lt;code>rfc_1918_addresses&lt;/code>&lt;/li>
+&lt;li>AND the return from the event is bigger than 0 OR is INPROGRESS&lt;/li>
+&lt;/ul>
+&lt;p>If you put this expression in vscode, you can work through the openning and closure of parenthisis. All existing fields are really well explained in &lt;a href="https://falco.org/docs/rules/supported-fields">supported fields&lt;/a>&lt;/p>
+&lt;p>But the above macro does not fits our needs, as it ignores the outbound connections to internal networks (rfc1918), which is the majority of enterprise cases. Let&amp;rsquo;s define then our own macro and rule:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">condition&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">&amp;gt;&lt;/span>&lt;span class="sd">
+&lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="sd"> (((evt.type = connect and evt.dir=&amp;lt;) or
+&lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="sd"> (evt.type in (sendto,sendmsg) and evt.dir=&amp;lt; and
+&lt;/span>&lt;span class="ln"> 5&lt;/span>&lt;span class="sd"> fd.l4proto != tcp and fd.connected=false and fd.name_changed=true)) and
+&lt;/span>&lt;span class="ln"> 6&lt;/span>&lt;span class="sd"> (fd.typechar = 4 or fd.typechar = 6) and
+&lt;/span>&lt;span class="ln"> 7&lt;/span>&lt;span class="sd"> (fd.ip != &amp;#34;0.0.0.0&amp;#34; and fd.net != &amp;#34;127.0.0.0/8&amp;#34;) and
+&lt;/span>&lt;span class="ln"> 8&lt;/span>&lt;span class="sd"> (evt.rawres &amp;gt;= 0 or evt.res = EINPROGRESS))&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln"> 9&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">10&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">list&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">k8s_not_monitored&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">11&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">items&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;green&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;blue&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">12&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">rule&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">kubernetes outbound connection&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">desc&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">A pod in namespace attempted to connect to the outer world&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">15&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">condition&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp and k8s.ns.name != &amp;#34;&amp;#34; and not k8s.ns.label.network in (k8s_not_monitored)&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">16&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">output&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s2">&amp;#34;Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc.name)&amp;#34;&lt;/span>&lt;span class="w">
+&lt;/span>&lt;span class="ln">17&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">priority&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">WARNING&lt;/span>&lt;span class="w">
+&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>The rule above:&lt;/p>
+&lt;ul>
+&lt;li>Creates a macro &lt;code>outbound_corp&lt;/code> that deals with any outbound connection&lt;/li>
+&lt;li>Creates a list &lt;code>k8s_not_monitored&lt;/code> with values &lt;code>blue&lt;/code> and &lt;code>green&lt;/code>&lt;/li>
+&lt;li>Creates a rule that verifies:
+&lt;ul>
+&lt;li>If it&amp;rsquo;s an outbound traffic defined in macro &lt;code>outbound_corp&lt;/code>&lt;/li>
+&lt;li>AND If the field k8s.ns.name is defined (which means it&amp;rsquo;s being executed inside Kubernetes)&lt;/li>
+&lt;li>And if the namespace containing the Pod does not have a label &lt;code>network&lt;/code> containing any of the values in list &lt;code>k8s_not_monitored&lt;/code>. If it does, the traffic wont be monitored&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>When this rule is triggered, the following output might be seen:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz srcip=172.16.204.12 dstip=192.168.0.1 dstport=80 proto=tcp procname=curl)
+&lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="applying-the-rules">Applying the rules&lt;/h2>
+&lt;p>As we&amp;rsquo;ve installed Falco using a helm chart, its rules configurations is a &lt;code>ConfigMap&lt;/code> in falco namespace.&lt;/p>
+&lt;p>Before we edit and mess with anything, a backup must be made:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl get cm -n falco falco -o yaml &amp;gt; falcoorig.yaml
+&lt;span class="ln">2&lt;/span>cp falcoorig.yaml falco.yaml
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now, inside the file &lt;code>falco.yaml&lt;/code> let&amp;rsquo;s edit the field &lt;code>falco_rules.local.yaml&lt;/code> (and only it!) to add our new set of rules defined above.&lt;/p>
+&lt;p>&lt;strong>Obs&lt;/strong>: There&amp;rsquo;s for sure a less dumb way of doing this, if you know how, call me on Twitter or Slack and give me an idea on how to patch only the &lt;code>falco_rules.local.yaml&lt;/code> part :D&lt;/p>
+&lt;p>After editing the file, let&amp;rsquo;s just delete and re-create (because some weird things happens) and then re-start falco deleting its Pods:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl delete -n falco -f falco.yaml
+&lt;span class="ln">2&lt;/span>kubectl create -n falco -f falco.yaml
+&lt;span class="ln">3&lt;/span>sleep &lt;span class="m">2&lt;/span>
+&lt;span class="ln">4&lt;/span>kubectl delete pod -n falco -l &lt;span class="nv">app&lt;/span>&lt;span class="o">=&lt;/span>falco
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>If the Pod enters in an &lt;code>Error&lt;/code> state, take a look into their logs to see if there&amp;rsquo;s some failure on rules (yaml = space problems!)&lt;/p>
+&lt;h2 id="show-me-the-logs">Show me the logs!!!&lt;/h2>
+&lt;p>Executing &lt;code>kubectl logs -n falco -l app=falco&lt;/code> we will see our outbound connection logs appearing:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;18:05:13.045457220: Warning Outbound network traffic connection from a Pod: (pod=falco-l8xmm namespace=falco srcip=192.168.0.150 dstip=192.168.0.11 dstport=2801 proto=tcp procname=falco) k8s.ns=falco k8s.pod=falco-l8xmm container=cb86ca8afdaa&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Warning&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;kubernetes outbound connection&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="nt">&amp;#34;time&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;2021-04-16T18:05:13.045457220Z&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="nt">&amp;#34;output_fields&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="nt">&amp;#34;container.id&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;cb86ca8afdaa&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="nt">&amp;#34;evt.time&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">1618596313045457220&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="nt">&amp;#34;fd.cip&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;192.168.0.150&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nt">&amp;#34;fd.l4proto&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;tcp&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="nt">&amp;#34;fd.sip&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;192.168.0.11&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="nt">&amp;#34;fd.sport&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="mi">2801&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="nt">&amp;#34;k8s.ns.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;falco&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
+&lt;span class="ln">15&lt;/span> &lt;span class="nt">&amp;#34;k8s.pod.name&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;falco-l8xmm&amp;#34;&lt;/span>
+&lt;span class="ln">16&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">17&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>But those are logs generated by the own Falco containers, and we don&amp;rsquo;t want them. Let&amp;rsquo;s mark this namespace with the label that will make it stop generating the logs from those Pods traffic:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl label ns falco &lt;span class="nv">network&lt;/span>&lt;span class="o">=&lt;/span>green
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Nice! Now that Falco Pods does not enter anymore in monitoring, let&amp;rsquo;s make some tests :D For that, I&amp;rsquo;ve created a namespace called &lt;code>testkatz&lt;/code> with some Pods inside, and then I&amp;rsquo;ve started to generate some outbound traffic:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
+&lt;span class="ln">2&lt;/span>=====
+&lt;span class="ln">3&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.406290360: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=172.217.30.164 dstport=80 proto=tcp procname=curl)
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>In the above log, we can see a call to the DNS, followed by a call to the destination server. We can see also which program inside the container started this traffic.&lt;/p>
+&lt;h2 id="a-better-visualization">A better visualization&lt;/h2>
+&lt;p>No one deserves to monitor by watching JSON logs streaming on the screen, right? Here comes Falco Sidekick to the rescue. It was installed with Falco, so we only need to configure it to send those &amp;ldquo;alerts&amp;rdquo; to a desired output.&lt;/p>
+&lt;p>Sidekick comes with a web interface, that can be accesses with a port-forward, as example:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj 2802
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>After that, you only need to access with your browser [http://localhost:2802/ui] and you will have something as cool as:&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick1.png" alt="Sidekick Dashboard">&lt;/p>
+&lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick2.png" alt="Sidekick Events">&lt;/p>
+&lt;p>But I want to send this to a place where I can retain this, as some install of Grafana Loki. You can use the Grafana Cloud Freetier for this example, but do not use this in production if you have a lot of logs :) You need to generate a base64 hash of your Loki URL as below:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>echo -n &amp;#34;https://USER:APIKEY@logs-prod-us-central1.grafana.net&amp;#34; |base64 -w0
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>With this hash, add it to the field &lt;code>LOKI_HOSTPORT&lt;/code> in the secret &lt;code>falco/falcosidekick&lt;/code>.&lt;/p>
+&lt;p>Finally, restart sidekick with &lt;code>kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick&lt;/code> and you should see messages like &lt;code>[INFO] : Loki - Post OK (204)&lt;/code> in sidekick log each time a new alert is triggered.&lt;/p>
+&lt;p>With that, you may have a dashboard in Grafana Cloud as I shown you on the beginning of this article :)&lt;/p>
+&lt;p>&lt;a href="https://gist.github.com/rikatz/d53751acf9b705262db992b3bd98acbe#file-dashboard-json">Here&lt;/a> is my dashboard example, but remember to change your Loki datastore, and also if you have improved this dashboard please post its config and a picture to make me happy!&lt;/p></description></item><item><title>Kubernetes Control Plane natively on FreeBSD with K3s</title><link>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</link><pubDate>Wed, 30 Dec 2020 17:55:19 -0300</pubDate><guid>https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/</guid><description>
 &lt;h2 id="introduction">Introduction&lt;/h2>
 &lt;p>I&amp;rsquo;ve been trying, on the past few days make Kubernetes usable on FreeBSD. Why? Some would say I like to suffer. Others would say I have much spare time.&lt;/p>
 &lt;p>To be honest, I&amp;rsquo;m doing this for fun. &lt;a href="https://www.freebsd.org">FreeBSD&lt;/a>, for me, is one of the most stable and performant Operating Systems, and it&amp;rsquo;s sad that we cannot
