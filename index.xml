@@ -3,7 +3,7 @@
 &lt;p>I&amp;rsquo;ve been trying, on the past few days make Kubernetes usable on FreeBSD. Why? Some would say I like to suffer. Others would say I have much spare time.&lt;/p>
 &lt;p>To be honest, I&amp;rsquo;m doing this for fun. &lt;a href="https://www.freebsd.org">FreeBSD&lt;/a>, for me, is one of the most stable and performant Operating Systems, and it&amp;rsquo;s sad that we cannot
 use it to run Kubernetes components (yet).&lt;/p>
-&lt;p>In a near future, me and &lt;a href="twitter.com/fuzzykb">Karen Bruner&lt;/a> are planning to make not only the control plane usable, but also to use one of the precedents of containers on
+&lt;p>In a near future, me and &lt;a href="https://twitter.com/fuzzykb">Karen Bruner&lt;/a> are planning to make not only the control plane usable, but also to use one of the precedents of containers on
 modern operating systems, even before Docker: &lt;a href="https://www.freebsd.org/doc/handbook/jails.html">Jails&lt;/a> as a &amp;ldquo;container runtime&amp;rdquo;.&lt;/p>
 &lt;p>I&amp;rsquo;m also using &lt;a href="https://k3s.io/">k3s&lt;/a> because I became too lazy to configure Kubernetes the hard way :P So bootstrapping an etcd, then the components was too much (for now)
 just to have some fun. But maybe some day, will do.&lt;/p>
