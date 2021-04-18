@@ -255,15 +255,15 @@ After that, you only need to access with your browser  [http://localhost:2802/ui
 
 ![Sidekick Events](/images/falcomonitoring/sidekick2.png)
 
-But I want to send this to a place where I can retain this, as some install of Grafana Loki. You can use the Grafana Cloud Freetier for this example, but do not use this in production if you have a lot of logs :) You need to generate a base64 hash of your Loki URL as below: 
+But I want to send this to a place where I can retain this, as some install of Grafana Loki. You can use the Grafana Cloud Freetier for this example, but do not use this in production if you have a lot of logs :) 
+
+After generating a user and apikey in Grafana Cloud, you can update your Falco sidekick install with the following command (thanks Thomas Labarussias for the idea!):
 
 ```
-echo -n "https://USER:APIKEY@logs-prod-us-central1.grafana.net" |base64 -w0
+helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net
 ```
 
-With this hash, add it to the field `LOKI_HOSTPORT` in the secret `falco/falcosidekick`.
-
-Finally, restart sidekick with `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` and you should see messages like `[INFO]  : Loki - Post OK (204)` in sidekick log each time a new alert is triggered. 
+Restart sidekick with `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` and you should see messages like `[INFO]  : Loki - Post OK (204)` in sidekick log each time a new alert is triggered. 
 
 With that, you may have a dashboard in Grafana Cloud as I shown you on the beginning of this article :)
 
