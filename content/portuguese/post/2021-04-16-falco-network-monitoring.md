@@ -172,29 +172,39 @@ Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz sr
 
 ## Aplicando as regras
 
-Como instalamos o Falco como um helm chart, sua configuração de regras é um `ConfigMap` no namespace falco.
+O Helm chart nos permite instalar [regras customizadas](https://github.com/falcosecurity/charts/tree/master/falco#loading-custom-rules) sem muito esforço.
 
-Antes de editarmos e fazermos qualquer besteira, o ideal é fazer um backup desse arquivo:
+Para fazer isso, nos pegamos as regras acima e colocamos dentro de uma estrutura `customRules` em um yaml, antes de atualizarmos a instalação:
+
+```yaml
+customRules:
+  rules-networking.yaml: |-
+    - macro: outbound_corp
+      condition: >
+        (((evt.type = connect and evt.dir=<) or
+          (evt.type in (sendto,sendmsg) and evt.dir=< and
+           fd.l4proto != tcp and fd.connected=false and fd.name_changed=true)) and
+         (fd.typechar = 4 or fd.typechar = 6) and
+         (fd.ip != "0.0.0.0" and fd.net != "127.0.0.0/8") and
+         (evt.rawres >= 0 or evt.res = EINPROGRESS))
+    - list: k8s_not_monitored
+      items: ['"green"', '"blue"']
+    - rule: kubernetes outbound connection
+      desc: A pod in namespace attempted to connect to the outer world
+      condition: outbound_corp and k8s.ns.name != "" and not k8s.ns.label.network in (k8s_not_monitored)
+      output: "Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc.    name)"
+      priority: WARNING
+```
+
+É exatamente a mesma regra explicada acima, mas dentro de um campo `customRules.rules-networking.yaml`.
+
+Após isso, nós atualizamos a instalação do Falco com o seguinte comando:
 
 ```
-kubectl get cm -n falco falco -o yaml > falcoorig.yaml
-cp falcoorig.yaml falco.yaml
+helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
 ```
 
-Agora, dentro desse arquivo de configuração (`falco.yaml`) vamos editar o campo `falco_rules.local.yaml` (e apenas ele!) para adicionarmos nosso novo conjunto de regras definido acima.
-
-**Obs**: Com certeza existe algum jeito menos idiota de fazer isso, se você souber como, me chama no twitter e fala como seria um patch nesse ConfigMap aí só com o `falco_rules.local.yaml`
-
-Depois de editar o falco.yaml, basta reaplicar o ConfigMap e apagar todos os Pods do Falco, que serão re-criados:
-
-```shell
-kubectl delete -n falco -f falco.yaml
-kubectl create -n falco -f falco.yaml
-sleep 2
-kubectl delete pod -n falco -l app=falco
-```
-
-Se o Pod estiver em status de `Error`, veja o log deles que podem indicar alguma falha na regra (lembre-se, é um YAML, erros com espaços acontecem MUITO!)
+Os Pods do Falco irão reiniciar. Se o Pod estiver em status de `Error`, veja o log deles que podem indicar alguma falha na regra (lembre-se, é um YAML, erros com espaços acontecem MUITO!)
 
 ## Mostre-me os Logs!!
 
@@ -253,7 +263,7 @@ Após isso, basta acessar o browser local através do endereço [http://localhos
 Mas isso não gera retenção. Vamos então configurar o Sidekick para apontar para um Grafana Loki. Pode-se usar o freetier do Grafana Cloud, por exemplo. Gere uma URL, User e API Key no dashboard do Grafana, e adicione as informações na instalação do Sidekick conforme a seguir (obrigado Thomas Labarussias pela ideia!):
 
 ```shell
-helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net
+helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
 ```
 
 Reinicie o sidekick com `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` e então você passará a ver mensagens `[INFO]  : Loki - Post OK (204)` no log do sidekick cada vez que um alerta for disparado.

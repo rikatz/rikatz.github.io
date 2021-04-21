@@ -175,29 +175,39 @@ Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz sr
 
 ## Applying the rules
 
-As we've installed Falco using a helm chart, its rules configurations is a `ConfigMap` in falco namespace.
+Helm chart allows us to install [custom rules](https://github.com/falcosecurity/charts/tree/master/falco#loading-custom-rules) without much effort. 
 
-Before we edit and mess with anything, a backup must be made:
+To do so, we need to pick the rules above and put inside a `customRules` structure, before 'upgrading' the installation:
 
-```shell
-kubectl get cm -n falco falco -o yaml > falcoorig.yaml
-cp falcoorig.yaml falco.yaml
+```yaml
+customRules:
+  rules-networking.yaml: |-
+    - macro: outbound_corp
+      condition: >
+        (((evt.type = connect and evt.dir=<) or
+          (evt.type in (sendto,sendmsg) and evt.dir=< and
+           fd.l4proto != tcp and fd.connected=false and fd.name_changed=true)) and
+         (fd.typechar = 4 or fd.typechar = 6) and
+         (fd.ip != "0.0.0.0" and fd.net != "127.0.0.0/8") and
+         (evt.rawres >= 0 or evt.res = EINPROGRESS))
+    - list: k8s_not_monitored
+      items: ['"green"', '"blue"']
+    - rule: kubernetes outbound connection
+      desc: A pod in namespace attempted to connect to the outer world
+      condition: outbound_corp and k8s.ns.name != "" and not k8s.ns.label.network in (k8s_not_monitored)
+      output: "Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc.    name)"
+      priority: WARNING
 ```
 
-Now, inside the file `falco.yaml` let's edit the field `falco_rules.local.yaml` (and only it!) to add our new set of rules defined above.
+It's the same rule as above, but inside a `customRules.rules-networking.yaml` field.
 
-**Obs**: There's for sure a less dumb way of doing this, if you know how, call me on Twitter or Slack and give me an idea on how to patch only the `falco_rules.local.yaml` part :D
+After that we just need to update Falco installation, with the following:
 
-After editing the file, let's just delete and re-create (because some weird things happens) and then re-start falco deleting its Pods:
-
-```shell
-kubectl delete -n falco -f falco.yaml
-kubectl create -n falco -f falco.yaml
-sleep 2
-kubectl delete pod -n falco -l app=falco
+```
+helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
 ```
 
-If the Pod enters in an `Error` state, take a look into their logs to see if there's some failure on rules (yaml = space problems!)
+Falco Pods will be restarted. If the Pod enters in an `Error` state, take a look into their logs to see if there's some failure on rules (yaml = space problems!)
 
 ## Show me the logs!!!
 
@@ -260,7 +270,7 @@ But I want to send this to a place where I can retain this, as some install of G
 After generating a user and apikey in Grafana Cloud, you can update your Falco sidekick install with the following command (thanks Thomas Labarussias for the idea!):
 
 ```
-helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net
+helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
 ```
 
 Restart sidekick with `kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick` and you should see messages like `[INFO]  : Loki - Post OK (204)` in sidekick log each time a new alert is triggered. 
