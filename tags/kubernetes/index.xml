@@ -134,7 +134,7 @@
 &lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="sd"> - rule: kubernetes outbound connection
 &lt;/span>&lt;span class="ln">14&lt;/span>&lt;span class="sd"> desc: A pod in namespace attempted to connect to the outer world
 &lt;/span>&lt;span class="ln">15&lt;/span>&lt;span class="sd"> condition: outbound_corp and k8s.ns.name != &amp;#34;&amp;#34; and not k8s.ns.label.network in (k8s_not_monitored)
-&lt;/span>&lt;span class="ln">16&lt;/span>&lt;span class="sd"> output: &amp;#34;Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc. name)&amp;#34;
+&lt;/span>&lt;span class="ln">16&lt;/span>&lt;span class="sd"> output: &amp;#34;Outbound network traffic connection from a Pod: (pod=%k8s.pod.name namespace=%k8s.ns.name srcip=%fd.cip dstip=%fd.sip dstport=%fd.sport proto=%fd.l4proto procname=%proc.name)&amp;#34;
 &lt;/span>&lt;span class="ln">17&lt;/span>&lt;span class="sd"> priority: WARNING&lt;/span>&lt;span class="w">
 &lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>It&amp;rsquo;s the same rule as above, but inside a &lt;code>customRules.rules-networking.yaml&lt;/code> field.&lt;/p>
 &lt;p>After that we just need to update Falco installation, with the following:&lt;/p>
