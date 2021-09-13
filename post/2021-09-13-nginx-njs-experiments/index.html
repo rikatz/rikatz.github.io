@@ -106,7 +106,7 @@ Share on:
 <p>So, I decided to look to alternatives. Not because Openresty and Lua are bad technologies. Opposite to that, those are pretty mature and stable technologies, and widely used in cool things like Kong API Gateway (<a href=https://konghq.com/kong/),>https://konghq.com/kong/),</a> Curiefense WAF (<a href=https://www.curiefense.io/>https://www.curiefense.io/</a>) and also as Envoy and HAProxy filters.</p>
 <p>The reason I decided to do that is a simple question I did to myself: &ldquo;can we do better? Can we improve this somehow? What can I learn from this?&rdquo;</p>
 <p>For this article, I will reproduce the most used Lua part of Ingress NGINX: dynamic upstreams. Not as complete as the real one, or with all features, but just for fun.</p>
-<p>I will put all of the experiments here in [https://github.com/rikatz/njs-experiments]</p>
+<p>I will put all of the experiments here in <a href=https://github.com/rikatz/njs-experiments>https://github.com/rikatz/njs-experiments</a></p>
 <h1 id=nginx-njs-scripting-language>NGINX NJS scripting language</h1>
 <p>Back to 2015 (I guess…) NGINX Inc announced a new feature in NGINX, called ngiScript, which turned later into NJS. NJS allows one to write the behavior of NGINX based on Javascript language.</p>
 <p>It&rsquo;s not as wide as the whole Javascript language but still allows one to do some cool things. There are some few examples <a href=https://nginx.org/en/docs/njs/examples.html>here</a> and <a href=https://github.com/xeioex/njs-examples>here</a> like creating some JWT signing or even an S3 Gateway&rsquo;ish. You may find more examples in <a href=https://www.nginx.com/blog/tag/nginx-javascript-module/>https://www.nginx.com/blog/tag/nginx-javascript-module/</a> and also googling around there about people using NJS as an antispam bot, etc.</p>
@@ -116,7 +116,7 @@ Share on:
 <li>For ever request that your server needs to deal with, it creates a small thread to run your javascript. It is pretty fast, but still you may end adding some latency in the processing of your requests. I haven&rsquo;t tested it (yet!) to see the performance differences between Lua x NJS.</li>
 <li>NJS is a core module from NGINX. While to make Lua work you need some Openresty external stuff, LuaJIT and other things that can go wrong, NJS is part of Nginx code. It&rsquo;s not installed as default, but you can simple download it from official NGINX package repo (or compile), and its version relates to the version you are using in NGINX (while with Openresty you are sort of stuck with previous versions, like v1.19, although we use it with NGINX v1.20 in Ingress NGINX).</li>
 </ul>
-<p>See more here: [https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/]</p>
+<p>See more here: <a href=https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/>https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/</a></p>
 <h1 id=starting-simple>Starting simple</h1>
 <p>So my first experiment: <strong>The hello world</strong> example.</p>
 <p>Because I&rsquo;m too lazy to install a new machine and do all the required things, I&rsquo;ve just used the &ldquo;nginx:stable&rdquo; docker image that have everything built in.</p>
