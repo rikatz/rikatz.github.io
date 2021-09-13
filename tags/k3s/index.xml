@@ -38,12 +38,12 @@ to bootstrap a Kubernetes cluster really, really fast.&lt;/p>
 &lt;ul>
 &lt;li>If you are on a Linux machine (and removed the gspt line mentioned above)&lt;/li>
 &lt;/ul>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>GOOS=freebsd go build -o k3s main.go
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>GOOS=freebsd go build -o k3s main.go
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>You can put also a GOARCH=arm64 together with GOOS=freebsd and compile it for RPi3&lt;/p>
 &lt;ul>
 &lt;li>If you are on a FreeBSD machine:&lt;/li>
 &lt;/ul>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>go build -o k3s main.go
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>go build -o k3s main.go
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Aaaand that&amp;rsquo;s it!&lt;/p>
 &lt;h2 id="running">Running&lt;/h2>
 &lt;p>Well, so here we got a problem. K3s was built to run as a standalone AIO with embedded database (sqlite), or you can use an external database (postgres, mysql, etcd, etc).&lt;/p>
@@ -56,14 +56,14 @@ to bootstrap a Kubernetes cluster really, really fast.&lt;/p>
 &lt;/ul>
 &lt;p>Installing Postgres on FreeBSD is really, really simple but yes, you can run this on an external DB running on Linux, in some cloud, etc.&lt;/p>
 &lt;p>But let&amp;rsquo;s install this DB. Assuming you have a FreeBSD box working:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>pkg update
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>pkg update
 &lt;span class="ln">2&lt;/span>pkg install postgresql12-server postgresql12-client
 &lt;span class="ln">3&lt;/span>sysrc postgresql_enable=yes
 &lt;span class="ln">4&lt;/span>/usr/local/etc/rc.d/postgresql initdb
 &lt;span class="ln">5&lt;/span>service postgresql start
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>And that&amp;rsquo;s it for PostgreSQL. Obviously, this is a VERY INSECURE lab setup! Don&amp;rsquo;t run this (or anything in this tutorial, to be fair) in Production!&lt;/p>
 &lt;p>Well, with Postgres up and running, you can run k3s and your control plane will be magically bootstrapped:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>./k3s server --datastore-endpoint=postgres://postgres@127.0.0.1?sslmode=disable
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>./k3s server --datastore-endpoint=postgres://postgres@127.0.0.1?sslmode=disable
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>This is going to print a lot of messages in your terminal, and now you have a Kubernetes Control Plane up and running natively on FreeBSD. Nice, right?&lt;/p>
 &lt;h2 id="testing">Testing&lt;/h2>
 &lt;p>Well, ok, the daemon is running but PROVE ME IT WORKS!&lt;/p>
@@ -75,18 +75,18 @@ to bootstrap a Kubernetes cluster really, really fast.&lt;/p>
 &lt;li>&lt;code>certificate-authority&lt;/code>, &lt;code>client-certificate&lt;/code> and &lt;code>client-key&lt;/code> to point to certificates location. If they&amp;rsquo;re on the same directory as admin.kubeconfig, just remove the leading path and leave only the file name&lt;/li>
 &lt;/ul>
 &lt;p>Great! So now let&amp;rsquo;s check if kubectl can communicate with the server and what it brings to us:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig version
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig version
 &lt;span class="ln">2&lt;/span>Client Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.1&amp;#34;, GitCommit:&amp;#34;c4d752765b3bbac2237bf87cf0b1c2e307844666&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-18T12:09:25Z&amp;#34;, GoVersion:&amp;#34;go1.15.5&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;linux/amd64&amp;#34;}
 &lt;span class="ln">3&lt;/span>Server Version: version.Info{Major:&amp;#34;1&amp;#34;, Minor:&amp;#34;20&amp;#34;, GitVersion:&amp;#34;v1.20.0-k3s1&amp;#34;, GitCommit:&amp;#34;3559625e27197f60bcc39c4b3ecffc80bad7785e&amp;#34;, GitTreeState:&amp;#34;clean&amp;#34;, BuildDate:&amp;#34;2020-12-08T20:42:55Z&amp;#34;, GoVersion:&amp;#34;go1.15.6&amp;#34;, Compiler:&amp;#34;gc&amp;#34;, Platform:&amp;#34;freebsd/amd64&amp;#34;}
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>So if you take a look above, you&amp;rsquo;ll see that the Server Platform is: &lt;code>&amp;quot;freebsd/amd64&amp;quot;&lt;/code> (I&amp;rsquo;m running as a VM here in my machine!)&lt;/p>
 &lt;p>&amp;ldquo;Nah, but this is not enough! I wanna see some Kubernetes Nodes!&amp;rdquo; - Me, talking with myself!&lt;/p>
 &lt;p>OK, so let&amp;rsquo;s go. First, you need to install k3s binary on some Linux machine. Go ahead, and grab some &lt;a href="https://github.com/k3s-io/k3s#manual-download">release&lt;/a>&lt;/p>
 &lt;p>Nice, so now we need the token to join our agent/node with our Control Plane. It&amp;rsquo;s located on the Control Plane machine, so grab the token with:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>cat /var/lib/rancher/k3s/server/token
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>cat /var/lib/rancher/k3s/server/token
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>With that token copied, go back to your Linux machine that you&amp;rsquo;re going to run your node/agent and run:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo k3s agent --server https://fbsd-ip:6443 --token THE-TOKEN-YOU-TOOK-NOTE
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>sudo k3s agent --server https://fbsd-ip:6443 --token THE-TOKEN-YOU-TOOK-NOTE
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>After some time, your node will appear for the Control Plane. You can check this way:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig get nodes
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl --kubeconfig=admin.kubeconfig get nodes
 &lt;span class="ln">2&lt;/span>NAME STATUS ROLES AGE VERSION
 &lt;span class="ln">3&lt;/span>node123 Ready &amp;lt;none&amp;gt; 68m v1.20.0+k3s2
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Go ahead, run some Pods, be happy :D&lt;/p></description></item></channel></rss>

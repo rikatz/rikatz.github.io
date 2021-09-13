@@ -29,7 +29,7 @@
 &lt;li>My Kubernetes install is v1.21.0 via Kubeadm. Pods are creted in network &lt;code>172.16.0.0/16&lt;/code>&lt;/li>
 &lt;/ul>
 &lt;p>To install Falco on Kubernetes using &lt;a href="http://helm.sh">helm&lt;/a>, basically you need to follow 4 steps:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>kubectl create ns falco
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>kubectl create ns falco
 &lt;span class="ln">2&lt;/span>helm repo add falcosecurity https://falcosecurity.github.io/charts
 &lt;span class="ln">3&lt;/span>helm repo update
 &lt;span class="ln">4&lt;/span>helm install falco falcosecurity/falco --namespace falco --set falcosidekick.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.webui.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set ebpf.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span>
@@ -37,10 +37,10 @@
 &lt;p>With this install, I&amp;rsquo;ve also enabled &lt;a href="https://github.com/falcosecurity/falcosidekick">sidekick&lt;/a> which is a really cool project that exports Falco events to a bunch of outputs, and also allows you to visualize them in its own interface&lt;/p>
 &lt;h2 id="creating-and-visualizing-alerts">Creating and visualizing alerts&lt;/h2>
 &lt;p>Falco has some default rules. As an example, as soon as it is executing, if you issue a &lt;code>kubectl exec -it&lt;/code> to a Pod, it will generate some alert:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl &lt;span class="nb">exec&lt;/span> -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl &lt;span class="nb">exec&lt;/span> -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
 &lt;span class="ln">2&lt;/span>root@nginx-6799fc88d8-996gz:/#
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>And in Falco logs (I&amp;rsquo;ve made this JSON clearer, but it&amp;rsquo;s a one liner)&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;14:23:15.139384666: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2 shell=bash parent=runc cmdline=bash terminal=34816 container_id=3db00b476ee2 image=nginx) k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Notice&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Terminal shell in container&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
@@ -63,7 +63,7 @@
 &lt;h2 id="creating-rules-for-falco">Creating rules for Falco&lt;/h2>
 &lt;p>Falco can monitor syscalls. A syscall of a network connection is of the &amp;lsquo;connect&amp;rsquo; type, and this way, we can create a basic rule so Falco can always generate a notification when some container tries to connect to the outside world.&lt;/p>
 &lt;p>Falco already comes with a pre defined list and macro for outbound connections:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="c"># RFC1918 addresses were assigned for private network usage&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="c"># RFC1918 addresses were assigned for private network usage&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">list&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">rfc_1918_addresses&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">items&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;10.0.0.0/8&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;172.16.0.0/12&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;192.168.0.0/16&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w">
@@ -85,7 +85,7 @@
 &lt;/ul>
 &lt;p>If you put this expression in vscode, you can work through the openning and closure of parenthisis. All existing fields are really well explained in &lt;a href="https://falco.org/docs/rules/supported-fields">supported fields&lt;/a>&lt;/p>
 &lt;p>But the above macro does not fits our needs, as it ignores the outbound connections to internal networks (rfc1918), which is the majority of enterprise cases. Let&amp;rsquo;s define then our own macro and rule:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">condition&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">&amp;gt;&lt;/span>&lt;span class="sd">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="sd"> (((evt.type = connect and evt.dir=&amp;lt;) or
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="sd"> (evt.type in (sendto,sendmsg) and evt.dir=&amp;lt; and
@@ -115,11 +115,11 @@
 &lt;/li>
 &lt;/ul>
 &lt;p>When this rule is triggered, the following output might be seen:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz srcip=172.16.204.12 dstip=192.168.0.1 dstport=80 proto=tcp procname=curl)
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz srcip=172.16.204.12 dstip=192.168.0.1 dstport=80 proto=tcp procname=curl)
 &lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="applying-the-rules">Applying the rules&lt;/h2>
 &lt;p>Helm chart allows us to install &lt;a href="https://github.com/falcosecurity/charts/tree/master/falco#loading-custom-rules">custom rules&lt;/a> without much effort.&lt;/p>
 &lt;p>To do so, we need to pick the rules above and put inside a &lt;code>customRules&lt;/code> structure, before &amp;lsquo;upgrading&amp;rsquo; the installation:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">customRules&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">customRules&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">rules-networking.yaml&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">|-&lt;/span>&lt;span class="sd">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="sd"> - macro: outbound_corp
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="sd"> condition: &amp;gt;
@@ -138,11 +138,11 @@
 &lt;/span>&lt;span class="ln">17&lt;/span>&lt;span class="sd"> priority: WARNING&lt;/span>&lt;span class="w">
 &lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>It&amp;rsquo;s the same rule as above, but inside a &lt;code>customRules.rules-networking.yaml&lt;/code> field.&lt;/p>
 &lt;p>After that we just need to update Falco installation, with the following:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Falco Pods will be restarted. If the Pod enters in an &lt;code>Error&lt;/code> state, take a look into their logs to see if there&amp;rsquo;s some failure on rules (yaml = space problems!)&lt;/p>
 &lt;h2 id="show-me-the-logs">Show me the logs!!!&lt;/h2>
 &lt;p>Executing &lt;code>kubectl logs -n falco -l app=falco&lt;/code> we will see our outbound connection logs appearing:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;18:05:13.045457220: Warning Outbound network traffic connection from a Pod: (pod=falco-l8xmm namespace=falco srcip=192.168.0.150 dstip=192.168.0.11 dstport=2801 proto=tcp procname=falco) k8s.ns=falco k8s.pod=falco-l8xmm container=cb86ca8afdaa&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Warning&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;kubernetes outbound connection&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
@@ -160,22 +160,22 @@
 &lt;span class="ln">16&lt;/span> &lt;span class="p">}&lt;/span>
 &lt;span class="ln">17&lt;/span>&lt;span class="p">}&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>But those are logs generated by the own Falco containers, and we don&amp;rsquo;t want them. Let&amp;rsquo;s mark this namespace with the label that will make it stop generating the logs from those Pods traffic:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl label ns falco &lt;span class="nv">network&lt;/span>&lt;span class="o">=&lt;/span>green
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl label ns falco &lt;span class="nv">network&lt;/span>&lt;span class="o">=&lt;/span>green
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Nice! Now that Falco Pods does not enter anymore in monitoring, let&amp;rsquo;s make some tests :D For that, I&amp;rsquo;ve created a namespace called &lt;code>testkatz&lt;/code> with some Pods inside, and then I&amp;rsquo;ve started to generate some outbound traffic:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
 &lt;span class="ln">2&lt;/span>=====
 &lt;span class="ln">3&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.406290360: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=172.217.30.164 dstport=80 proto=tcp procname=curl)
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>In the above log, we can see a call to the DNS, followed by a call to the destination server. We can see also which program inside the container started this traffic.&lt;/p>
 &lt;h2 id="a-better-visualization">A better visualization&lt;/h2>
 &lt;p>No one deserves to monitor by watching JSON logs streaming on the screen, right? Here comes Falco Sidekick to the rescue. It was installed with Falco, so we only need to configure it to send those &amp;ldquo;alerts&amp;rdquo; to a desired output.&lt;/p>
 &lt;p>Sidekick comes with a web interface, that can be accesses with a port-forward, as example:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj 2802
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj 2802
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>After that, you only need to access with your browser [http://localhost:2802/ui] and you will have something as cool as:&lt;/p>
 &lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick1.png" alt="Sidekick Dashboard">&lt;/p>
 &lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick2.png" alt="Sidekick Events">&lt;/p>
 &lt;p>But I want to send this to a place where I can retain this, as some install of Grafana Loki. You can use the Grafana Cloud Freetier for this example, but do not use this in production if you have a lot of logs :)&lt;/p>
 &lt;p>After generating a user and apikey in Grafana Cloud, you can update your Falco sidekick install with the following command (thanks Thomas Labarussias for the idea!):&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true --set falcosidekick.config.loki.hostport=https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Restart sidekick with &lt;code>kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick&lt;/code> and you should see messages like &lt;code>[INFO] : Loki - Post OK (204)&lt;/code> in sidekick log each time a new alert is triggered.&lt;/p>
 &lt;p>With that, you may have a dashboard in Grafana Cloud as I shown you on the beginning of this article :)&lt;/p>
 &lt;p>&lt;a href="https://gist.github.com/rikatz/d53751acf9b705262db992b3bd98acbe#file-dashboard-json">Here&lt;/a> is my dashboard example, but remember to change your Loki datastore, and also if you have improved this dashboard please post its config and a picture to make me happy!&lt;/p></description></item></channel></rss>

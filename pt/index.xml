@@ -29,7 +29,7 @@
 &lt;li>Meu Kubernetes é o v1.21.0, instalado via Kubeadm. Os pods são criados na rede &lt;code>172.16.0.0/16&lt;/code>&lt;/li>
 &lt;/ul>
 &lt;p>Para instalar o Falco no Kubernetes usando o &lt;a href="http://helm.sh">helm&lt;/a>, basicamente são 4 passos (claro que você pode alterar, eu segui assim para demonstrar aqui):&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>kubectl create ns falco &lt;span class="c1"># Eu quero rodar em outro namespace&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-bash" data-lang="bash">&lt;span class="ln">1&lt;/span>kubectl create ns falco &lt;span class="c1"># Eu quero rodar em outro namespace&lt;/span>
 &lt;span class="ln">2&lt;/span>helm repo add falcosecurity https://falcosecurity.github.io/charts
 &lt;span class="ln">3&lt;/span>helm repo update
 &lt;span class="ln">4&lt;/span>helm install falco falcosecurity/falco --namespace falco --set falcosidekick.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.webui.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set ebpf.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span>
@@ -37,10 +37,10 @@
 &lt;p>Na instalação acima, eu habilitei também o &lt;a href="https://github.com/falcosecurity/falcosidekick">sidekick&lt;/a> que é um projeto bem maneiro para exportar os eventos do Falco (usarei para exportar para um Elasticsearch), bem como visualizar esses eventos em sua própria UI.&lt;/p>
 &lt;h2 id="gerando-alertas-e-visualizando">Gerando alertas e visualizando&lt;/h2>
 &lt;p>O Falco vem com algumas regras por padrão. Por exemplo, à partir do momento que ele está em execução, se você tentar dar um &lt;code>kubectl exec -it&lt;/code> em um Pod, ele irá gerar um alerta:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl &lt;span class="nb">exec&lt;/span> -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl &lt;span class="nb">exec&lt;/span> -it -n testkatz nginx-6799fc88d8-996gz -- /bin/bash
 &lt;span class="ln">2&lt;/span>root@nginx-6799fc88d8-996gz:/#
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>E nos logs do Falco (eu dei uma melhorada nesse JSON!):&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;14:23:15.139384666: Notice A shell was spawned in a container with an attached terminal (user=root user_loginuid=-1 k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2 shell=bash parent=runc cmdline=bash terminal=34816 container_id=3db00b476ee2 image=nginx) k8s.ns=testkatz k8s.pod=nginx-6799fc88d8-996gz container=3db00b476ee2&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Notice&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Terminal shell in container&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
@@ -63,7 +63,7 @@
 &lt;h2 id="criando-regras-para-o-falco">Criando regras para o Falco&lt;/h2>
 &lt;p>Como eu falei, o Falco consegue monitorar as chamadas em syscall. Uma syscall de conexão de rede é do tipo &amp;lsquo;connect&amp;rsquo;, e sendo assim, podemos criar uma regra básica para o Falco que sempre gere uma notificação quando algum container tentar conectar-se a algum ativo externo a ele.&lt;/p>
 &lt;p>O Falco vem com uma macro e uma lista pré definida para conexões que saiam de rede assim:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="c"># RFC1918 addresses were assigned for private network usage&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="c"># RFC1918 addresses were assigned for private network usage&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w">&lt;/span>- &lt;span class="nt">list&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">rfc_1918_addresses&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">items&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;10.0.0.0/8&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;172.16.0.0/12&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">,&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="s1">&amp;#39;&amp;#34;192.168.0.0/16&amp;#34;&amp;#39;&lt;/span>&lt;span class="p">]&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w">
@@ -85,7 +85,7 @@
 &lt;/ul>
 &lt;p>Difícil? Na verdade, jogue essa expressão no vscode, e vá trabalhando ela através da abertura e fechamento de parenteses. Todos os campos existentes aqui estão muito bem explicados em &lt;a href="https://falco.org/docs/rules/supported-fields">Campos suportados&lt;/a>&lt;/p>
 &lt;p>Porém, a macro acima não nos atende, pois filtra a saída para redes internas (rfc1918), o que é o caso da maioria das empresas. Vamos definir então o nosso conjunto macro/regra:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>- &lt;span class="nt">macro&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">outbound_corp&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">condition&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">&amp;gt;&lt;/span>&lt;span class="sd">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="sd"> (((evt.type = connect and evt.dir=&amp;lt;) or
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="sd"> (evt.type in (sendto,sendmsg) and evt.dir=&amp;lt; and
@@ -115,11 +115,11 @@
 &lt;/li>
 &lt;/ul>
 &lt;p>Se essa regra for acionada, a seguinte saída será gerada:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz srcip=172.16.204.12 dstip=192.168.0.1 dstport=80 proto=tcp procname=curl)
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>Outbound network traffic connection from a Pod: (pod=nginx namespace=testkatz srcip=172.16.204.12 dstip=192.168.0.1 dstport=80 proto=tcp procname=curl)
 &lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="aplicando-as-regras">Aplicando as regras&lt;/h2>
 &lt;p>O Helm chart nos permite instalar &lt;a href="https://github.com/falcosecurity/charts/tree/master/falco#loading-custom-rules">regras customizadas&lt;/a> sem muito esforço.&lt;/p>
 &lt;p>Para fazer isso, nos pegamos as regras acima e colocamos dentro de uma estrutura &lt;code>customRules&lt;/code> em um yaml, antes de atualizarmos a instalação:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">customRules&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">customRules&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">rules-networking.yaml&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="p">|-&lt;/span>&lt;span class="sd">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="sd"> - macro: outbound_corp
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="sd"> condition: &amp;gt;
@@ -138,11 +138,11 @@
 &lt;/span>&lt;span class="ln">17&lt;/span>&lt;span class="sd"> priority: WARNING&lt;/span>&lt;span class="w">
 &lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;p>É exatamente a mesma regra explicada acima, mas dentro de um campo &lt;code>customRules.rules-networking.yaml&lt;/code>.&lt;/p>
 &lt;p>Após isso, nós atualizamos a instalação do Falco com o seguinte comando:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled=true --set falcosidekick.webui.enabled=true --set ebpf.enabled=true -f custom-rules.yaml
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Os Pods do Falco irão reiniciar. Se o Pod estiver em status de &lt;code>Error&lt;/code>, veja o log deles que podem indicar alguma falha na regra (lembre-se, é um YAML, erros com espaços acontecem MUITO!)&lt;/p>
 &lt;h2 id="mostre-me-os-logs">Mostre-me os Logs!!&lt;/h2>
 &lt;p>Executando um &lt;code>kubectl logs -n falco -l app=falco&lt;/code> veremos que nossos logs já estão aparecendo:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;output&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;18:05:13.045457220: Warning Outbound network traffic connection from a Pod: (pod=falco-l8xmm namespace=falco srcip=192.168.0.150 dstip=192.168.0.11 dstport=2801 proto=tcp procname=falco) k8s.ns=falco k8s.pod=falco-l8xmm container=cb86ca8afdaa&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;priority&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;Warning&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;rule&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="s2">&amp;#34;kubernetes outbound connection&amp;#34;&lt;/span>&lt;span class="p">,&lt;/span>
@@ -160,21 +160,21 @@
 &lt;span class="ln">16&lt;/span> &lt;span class="p">}&lt;/span>
 &lt;span class="ln">17&lt;/span>&lt;span class="p">}&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Mas esses são os Logs do próprio Falco, que não nos interessam. Vamos então marcar o namespace com a label que fará parar de gerar logs do tráfego dos Pods do Falco:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl label ns falco &lt;span class="nv">network&lt;/span>&lt;span class="o">=&lt;/span>green
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl label ns falco &lt;span class="nv">network&lt;/span>&lt;span class="o">=&lt;/span>green
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Show, agora que os Pods do Falco não entram nos logs de monitoração, vamos fazer uns testes :D Para isso eu criei um namespace chamado &lt;code>testkatz&lt;/code> com alguns Pods dentro, e irei gerar um pouco de tráfego de saída:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.365837060: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=10.96.0.10 dstport=53 proto=udp procname=curl)
 &lt;span class="ln">2&lt;/span>=====
 &lt;span class="ln">3&lt;/span>&amp;#34;output&amp;#34;:&amp;#34;18:11:04.406290360: Warning Outbound network traffic connection from a Pod: (pod=nginx-6799fc88d8-996gz namespace=testkatz srcip=172.16.166.174 dstip=172.217.30.164 dstport=80 proto=tcp procname=curl)
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>No log acima, podemos ver a chamada ao DNS, e em seguida a chamada ao servidor de destino. Vemos inclusive que o programa que fez essas chamadas foi o &lt;code>curl&lt;/code> rodando dentro do container.&lt;/p>
 &lt;h2 id="visualizando-de-forma-melhorada">Visualizando de forma melhorada&lt;/h2>
 &lt;p>Ninguém merece ficar vendo logs JSON rodando na tela, certo? Entra em ação aqui o Falco Sidekick. Ele foi instalado no começo, então a configuração que precisamos fazer é para que ele envie esses &amp;ldquo;alertas&amp;rdquo; para algum lugar desejado.&lt;/p>
 &lt;p>O sidekick vem com uma interface Web, que pode ser acessada via port-forward, por exemplo:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj &lt;span class="m">2802&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>kubectl port-forward -n falco pod/falco-falcosidekick-ui-764f5f469f-njppj &lt;span class="m">2802&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Após isso, basta acessar o browser local através do endereço [http://localhost:2802/ui] e você terá algo tão legal quanto:&lt;/p>
 &lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick1.png" alt="Sidekick Dashboard">&lt;/p>
 &lt;p>&lt;img src="https://www.rkatz.xyz/images/falcomonitoring/sidekick2.png" alt="Sidekick Events">&lt;/p>
 &lt;p>Mas isso não gera retenção. Vamos então configurar o Sidekick para apontar para um Grafana Loki. Pode-se usar o freetier do Grafana Cloud, por exemplo. Gere uma URL, User e API Key no dashboard do Grafana, e adicione as informações na instalação do Sidekick conforme a seguir (obrigado Thomas Labarussias pela ideia!):&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.webui.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set ebpf.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.config.loki.hostport&lt;span class="o">=&lt;/span>https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>helm upgrade falco falcosecurity/falco --namespace falco --set falcosidekick.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.webui.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set ebpf.enabled&lt;span class="o">=&lt;/span>&lt;span class="nb">true&lt;/span> --set falcosidekick.config.loki.hostport&lt;span class="o">=&lt;/span>https://USER:APIKEY@logs-prod-us-central1.grafana.net -f custom-rules.yaml
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Reinicie o sidekick com &lt;code>kubectl delete pods -n falco -l app.kubernetes.io/name=falcosidekick&lt;/code> e então você passará a ver mensagens &lt;code>[INFO] : Loki - Post OK (204)&lt;/code> no log do sidekick cada vez que um alerta for disparado.&lt;/p>
 &lt;p>Com isso, no Grafana Cloud você conseguirá ter um dashboard parecido com o que mostrei acima :)&lt;/p>
 &lt;p>Eu deixei meu exemplo de dashboard &lt;a href="https://gist.github.com/rikatz/d53751acf9b705262db992b3bd98acbe#file-dashboard-json">aqui&lt;/a> mas lembre-se de alterar para o seu datasource do Loki e, caso você tenha melhorado o dashboard, não deixe de postar e mandar uma foto :D&lt;/p></description></item><item><title>Flatcar Linux no VMware Player — Deploy em 5 minutos no terminal</title><link>https://www.rkatz.xyz/pt/post/2020-09-13-flatcar/</link><pubDate>Sun, 13 Sep 2020 20:28:50 -0300</pubDate><guid>https://www.rkatz.xyz/pt/post/2020-09-13-flatcar/</guid><description>
@@ -189,7 +189,7 @@
 &lt;h2 id="escrevendo-o-arquivo-de-configuração">Escrevendo o arquivo de configuração&lt;/h2>
 &lt;p>Aqui temos os primeiros passos para gerar uma &lt;a href="https://docs.flatcar-linux.org/container-linux-config-transpiler/doc/examples/">Configuração para o Container Linux&lt;/a> contendo ao menos um usuário com uma chave SSH autorizada e o hostname da VM. Você pode configurar a VM com qualquer configuração suportada no link acima.&lt;/p>
 &lt;p>Vamos criar um arquivo chamado &lt;code>config.yaml&lt;/code>&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">users&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">core&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">ssh_authorized_keys&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
@@ -209,7 +209,7 @@
 &lt;p>Por favor tenha em mente que isso é um YAML, logo você nunca deve copiar e colar para não ser punido ferozmente por algum espaço/tab sobrando ou faltando.&lt;/p>
 &lt;p>Você pode agora &amp;lsquo;transplantar&amp;rsquo; essa configuração e transformá-la em um JSON que será usado pelo Ignition quando a VM estiver iniciando pela primeira vez.&lt;/p>
 &lt;p>Executando o comando &lt;code>ct --in-file config.yaml --pretty&lt;/code> será exibida uma saída com uma versão &amp;lsquo;botininha&amp;rsquo; do arquivo ignition:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;ignition&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;config&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;security&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
@@ -252,10 +252,10 @@
 &lt;span class="ln">41&lt;/span>&lt;span class="p">}&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Agora você pode pegar esse JSON e converter para base64, que será lido pelo Flatcar quando estiver iniciando. Essa configuração não precisa necessariamente ser convertida para base64, mas reduz a chance de existir algum caracter errado no meio da configuração quando você fizer o copiar/colar ela.&lt;/p>
 &lt;p>O comando completo é &lt;code>ct --in-file config.yaml --pretty |base64 -w0&lt;/code> mas por favor TENHA EM MENTE que no MacOS/Darwin o comando base64 pode não conter um -w0, dependendo da versão que você usa, então será necessário fazer sed/replace em todas as quebras de linha. A linha do Base64 ficará mais ou menos assim:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
 &lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="fazendo-deploy-no-vmware-player">Fazendo deploy no VMware Player&lt;/h2>
 &lt;p>Bom, se você chegou até aqui com o conteúdo base64 criado corretamente, e contendo a configuração do Flatcar Container Linux, agora será apenas necessário criar a Máquina Virtual usando o utilitário &lt;code>ovftool&lt;/code> e sua VM estará pronta para uso:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
 &lt;/span>&lt;span class="ln">2&lt;/span>&lt;span class="se">&lt;/span>--X:injectOvfEnv --name&lt;span class="o">=&lt;/span>flatcar --memorySize:&lt;span class="s1">&amp;#39;*&amp;#39;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">3072&lt;/span> &lt;span class="se">\
 &lt;/span>&lt;span class="ln">3&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data.encoding&lt;span class="o">=&lt;/span>base64 &lt;span class="se">\
 &lt;/span>&lt;span class="ln">4&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data&lt;span class="o">=&lt;/span>BASE64_GERADO_ACIMA &lt;span class="se">\

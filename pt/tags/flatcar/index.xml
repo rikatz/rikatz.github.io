@@ -10,7 +10,7 @@
 &lt;h2 id="escrevendo-o-arquivo-de-configuração">Escrevendo o arquivo de configuração&lt;/h2>
 &lt;p>Aqui temos os primeiros passos para gerar uma &lt;a href="https://docs.flatcar-linux.org/container-linux-config-transpiler/doc/examples/">Configuração para o Container Linux&lt;/a> contendo ao menos um usuário com uma chave SSH autorizada e o hostname da VM. Você pode configurar a VM com qualquer configuração suportada no link acima.&lt;/p>
 &lt;p>Vamos criar um arquivo chamado &lt;code>config.yaml&lt;/code>&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-yaml" data-lang="yaml">&lt;span class="ln"> 1&lt;/span>&lt;span class="nt">passwd&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 2&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">users&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 3&lt;/span>&lt;span class="w"> &lt;/span>- &lt;span class="nt">name&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="l">core&lt;/span>&lt;span class="w">
 &lt;/span>&lt;span class="ln"> 4&lt;/span>&lt;span class="w"> &lt;/span>&lt;span class="nt">ssh_authorized_keys&lt;/span>&lt;span class="p">:&lt;/span>&lt;span class="w">
@@ -30,7 +30,7 @@
 &lt;p>Por favor tenha em mente que isso é um YAML, logo você nunca deve copiar e colar para não ser punido ferozmente por algum espaço/tab sobrando ou faltando.&lt;/p>
 &lt;p>Você pode agora &amp;lsquo;transplantar&amp;rsquo; essa configuração e transformá-la em um JSON que será usado pelo Ignition quando a VM estiver iniciando pela primeira vez.&lt;/p>
 &lt;p>Executando o comando &lt;code>ct --in-file config.yaml --pretty&lt;/code> será exibida uma saída com uma versão &amp;lsquo;botininha&amp;rsquo; do arquivo ignition:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-json" data-lang="json">&lt;span class="ln"> 1&lt;/span>&lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 2&lt;/span> &lt;span class="nt">&amp;#34;ignition&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
 &lt;span class="ln"> 3&lt;/span> &lt;span class="nt">&amp;#34;config&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{},&lt;/span>
 &lt;span class="ln"> 4&lt;/span> &lt;span class="nt">&amp;#34;security&amp;#34;&lt;/span>&lt;span class="p">:&lt;/span> &lt;span class="p">{&lt;/span>
@@ -73,10 +73,10 @@
 &lt;span class="ln">41&lt;/span>&lt;span class="p">}&lt;/span>
 &lt;/code>&lt;/pre>&lt;/div>&lt;p>Agora você pode pegar esse JSON e converter para base64, que será lido pelo Flatcar quando estiver iniciando. Essa configuração não precisa necessariamente ser convertida para base64, mas reduz a chance de existir algum caracter errado no meio da configuração quando você fizer o copiar/colar ela.&lt;/p>
 &lt;p>O comando completo é &lt;code>ct --in-file config.yaml --pretty |base64 -w0&lt;/code> mas por favor TENHA EM MENTE que no MacOS/Darwin o comando base64 pode não conter um -w0, dependendo da versão que você usa, então será necessário fazer sed/replace em todas as quebras de linha. A linha do Base64 ficará mais ou menos assim:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>ewogICJpZ25pdGlvbiI6IHsKICAgICJjb25maWciOiB7fSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgInRscyI6IHt9CiAgICB9LAogICAgInRpbWVvdXRzIjoge30sCiAgICAidmVyc2lvbiI6ICIyLjIuMCIKICB9LAogICJuZXR3b3JrZCI6IHt9LAogICJwYXNzd2QiOiB7CiAgICAidXNlcnMiOiBbCiAgICAgIHsKICAgICAgICAibmFtZSI6ICJjb3JlIiwKICAgICAgICAic3NoQXV0aG9yaXplZEtleXMiOiBbCiAgICAgICAgICAic3NoLXJzYSBBQUFBQjNOemF[........]
 &lt;/code>&lt;/pre>&lt;/div>&lt;h2 id="fazendo-deploy-no-vmware-player">Fazendo deploy no VMware Player&lt;/h2>
 &lt;p>Bom, se você chegou até aqui com o conteúdo base64 criado corretamente, e contendo a configuração do Flatcar Container Linux, agora será apenas necessário criar a Máquina Virtual usando o utilitário &lt;code>ovftool&lt;/code> e sua VM estará pronta para uso:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-shell" data-lang="shell">&lt;span class="ln">1&lt;/span>ovftool --allowExtraConfig --X:enableHiddenProperties &lt;span class="se">\
 &lt;/span>&lt;span class="ln">2&lt;/span>&lt;span class="se">&lt;/span>--X:injectOvfEnv --name&lt;span class="o">=&lt;/span>flatcar --memorySize:&lt;span class="s1">&amp;#39;*&amp;#39;&lt;/span>&lt;span class="o">=&lt;/span>&lt;span class="m">3072&lt;/span> &lt;span class="se">\
 &lt;/span>&lt;span class="ln">3&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data.encoding&lt;span class="o">=&lt;/span>base64 &lt;span class="se">\
 &lt;/span>&lt;span class="ln">4&lt;/span>&lt;span class="se">&lt;/span>--extraConfig:guestinfo.coreos.config.data&lt;span class="o">=&lt;/span>BASE64_GERADO_ACIMA &lt;span class="se">\

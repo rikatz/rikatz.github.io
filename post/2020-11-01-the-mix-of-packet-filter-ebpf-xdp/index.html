@@ -1,13 +1,147 @@
-<!doctype html><html lang=en data-figures=true class=page><head><title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP | The Katz Experiments</title><meta charset=utf-8><meta name=generator content="Hugo 0.83.1"><meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta http-equiv=x-ua-compatible content="IE=edge"><script async src="https://www.googletagmanager.com/gtag/js?id=UA-177903864-1"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date),gtag('config','UA-177903864-1')</script><meta property="og:locale" content="en"><meta property="og:type" content="article"><meta name=description content="In this part I'll explain briefly how eBPF + XDP works and write a simple program to log and drop packets to see where XDP fits in the stack"><meta name=twitter:card content="summary_large_image"><meta name=twitter:creator content="@rpkatz"><meta name=twitter:title content="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP"><meta property="og:url" content="https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/"><meta property="og:title" content="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP"><meta property="og:description" content="In this part I'll explain briefly how eBPF + XDP works and write a simple program to log and drop packets to see where XDP fits in the stack"><meta property="og:image" content="https://www.rkatz.xyz/images/thumbnail.png"><link rel=canonical href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/><link rel=preload href=https://www.rkatz.xyz/css/styles.f447efe4c4b72136d91de28493ae7ef4ecc0c35f80359801224320ede7871c488414b1dfba5913dffd7a1ed5f70440802a87e8795f124086b949e35e6579b5d9.css integrity="sha512-9Efv5MS3ITbZHeKEk65+9OzAw1+ANZgBIkMg7eeHHEiEFLHfulkT3/16HtX3BECAKofoeV8SQIa5SeNeZXm12Q==" as=style crossorigin=anonymous><link rel=preload href=https://www.rkatz.xyz/js/bundle.min.8aaa68ba6ac372efc65098bfd6818bcabb389eb8d54a56d6702fd0d20644ad1c4f6787829480ed81b53ccbf0b0b70a4218076334f0e7330413b76ecf24029cbd.js as=script integrity="sha512-iqpoumrDcu/GUJi/1oGLyrs4nrjVSlbWcC/Q0gZErRxPZ4eClIDtgbU8y/CwtwpCGAdjNPDnMwQTt27PJAKcvQ==" crossorigin=anonymous><link rel=stylesheet type=text/css href=https://www.rkatz.xyz/css/styles.f447efe4c4b72136d91de28493ae7ef4ecc0c35f80359801224320ede7871c488414b1dfba5913dffd7a1ed5f70440802a87e8795f124086b949e35e6579b5d9.css integrity="sha512-9Efv5MS3ITbZHeKEk65+9OzAw1+ANZgBIkMg7eeHHEiEFLHfulkT3/16HtX3BECAKofoeV8SQIa5SeNeZXm12Q==" crossorigin=anonymous></head><body data-code=100 data-lines=true id=documentTop><header class=nav_header><nav class=nav><a href=https://www.rkatz.xyz/ class="nav_brand nav_item" title="The Katz Experiments">The Katz Experiments<div class=nav_close><div><svg class="icon"><use xlink:href="#open-menu"/></svg><svg class="icon"><use xlink:href="#closeme"/></svg></div></div></a><div class="nav_body nav_body_left"><div class=nav_parent><a href=https://www.rkatz.xyz/ class=nav_item title=Home>Home</a></div><div class=nav_parent><a href=https://www.rkatz.xyz/post/rich-content/ class=nav_item title=Archives>Archives</a></div><div class=nav_parent><a href=https://www.rkatz.xyz/ class=nav_item title=Links>Links <img src=https://www.rkatz.xyz/icons/caret-icon.svg alt=icon class=nav_icon></a><div class=nav_sub><span class=nav_child></span><a href=https://www.linkedin.com/katzricardo class="nav_child nav_item" title=LinkedIn>LinkedIn</a>
-<a href=https://twitter.com/rpkatz class="nav_child nav_item" title=Twitter>Twitter</a></div></div><div class=nav_parent><a href=https://www.rkatz.xyz/about/ class=nav_item title=About>About</a></div><div class=nav_parent><a href=# class=nav_item>🌐</a><div class=nav_sub><span class=nav_child></span><a href=https://www.rkatz.xyz/ class="nav_child nav_item">English</a>
-<a href=https://www.rkatz.xyz/pt/ class="nav_child nav_item">Português</a></div></div><div class=follow><a href=https://github.com/rikatz><svg class="icon"><use xlink:href="#github"/></svg></a><a href=https://twitter.com/rpkatz><svg class="icon"><use xlink:href="#twitter"/></svg></a><a href=https://www.linkedin.com/in/katzricardo><svg class="icon"><use xlink:href="#linkedin"/></svg></a><a href=https://www.rkatz.xyz/index.xml><svg class="icon"><use xlink:href="#rss"/></svg></a><div class=color_mode><input type=checkbox class=color_choice id=mode></div></div></div></nav></header><main><div class="grid-inverse wrap content"><article class=post_content><h1 class=post_title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</h1><div class=post_meta><span><svg class="icon"><use xlink:href="#calendar"/></svg></span><span class=post_date>Nov 1, 2020</span>
-<span class=post_time>· 10 min read&nbsp;</span>
-<span>·
-<a href=https://www.rkatz.xyz/tags/packet-filtering title="Packet filtering" class="post_tag button button_translucent">Packet filtering</a> ·
-<a href=https://www.rkatz.xyz/tags/ebpf title=ebpf class="post_tag button button_translucent">ebpf</a> ·
-<a href=https://www.rkatz.xyz/tags/xdp title=xdp class="post_tag button button_translucent">xdp</a></span>
-<span class=page_only>·<div class=post_share>Share on:
-<a href="https://twitter.com/intent/tweet?text=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg></a><a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&t=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg></a><a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg></a><a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg></a></div></span></div><h2>Overview</h2><nav id=TableOfContents><ul><li><a href=#introduction>Introduction</a></li><li><a href=#what-is-ebpf>What is eBPF</a></li><li><a href=#methodology>Methodology</a></li><li><a href=#xdp>XDP</a></li><li><a href=#compiling-and-loading-everything>Compiling and loading everything</a></li><li><a href=#and-where-is-xdp-positioned>And where is XDP positioned?</a></li><li><a href=#final-thoughts-and-next-steps>Final Thoughts and next steps</a></li><li><a href=#references>References:</a></li></ul></nav><h2 id=introduction>Introduction</h2><p>In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.</p><p>This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.</p><p><strong>Spoiler alert</strong>: As I’ve said in the previous article, I’m not a expert of eBPF, but a new learner. So expect mistakes, and provide me feedback! I do appreciate that!</p><h2 id=what-is-ebpf>What is eBPF</h2><p>The simplest definition I’ve seen somewhere is that eBPF is a way to run specific and confined programs within Linux Kernel, but without having to put code into the Kernel tree or developing modules.</p><p>Some articles define eBPF as a &ldquo;Virtual Machine&rdquo; (in the concept of isolation, not the VMs like KVM thing) that run programs triggered by some Kernel action.</p><p>As an example, imagine a system call that happens (like opening a file) and you want to trigger an action to count how many times that system call happens. Or a program that is triggered when a packet arrives on a specific network interface.</p><p>Because those programs are written in C (yeah, sorry!), compiled and attached to some part of your system, eBPF needs to count with some user space area to read and write dynamic data. This area is called map, and can be manipulated while the eBPF program runs.</p><p>So, for our examples, we’re going to write a really simple packet filter program, attach it to our network interface and see what and how it happens.</p><p>For some more detailed explanation of eBPF, I recommend the following readings:</p><ul><li><a href=https://docs.cilium.io/en/v1.8/bpf/>https://docs.cilium.io/en/v1.8/bpf/</a></li><li><a href=https://ebpf.io/what-is-ebpf>https://ebpf.io/what-is-ebpf</a></li></ul><h2 id=methodology>Methodology</h2><p>The methodology is going to be pretty much the same as the previous part of the article: write a program that logs and accept (or drop) a packet in port 12345, open a <code>netcat</code> listening in this port and trigger the actions.</p><p>So for the sake of this article, the <em>action</em> that is going to trigger our program is a packet arriving on the network interface, and the magic is going to happen there.</p><p>eBPF have at least two ways to deal with the packet filtering, like XDP, that I’m going to cover them now, and TC that I’ll cover in some other article</p><h2 id=xdp>XDP</h2><p>XDP, also known as eXpress Data Path is a specific eBPF program that runs close to the Network device. It’s run even before the packet can arrive at the kernel stack.</p><p>There are some network devices that support executing XDP programs directly, so yes, XDP is so powerful that you can process and take an action (like drop) a packet almost in the wire, without needing to overload your kernel.</p><p>Because such a low level processing is executed, we need to first have some understanding of how a network packet is composed, so let’s assume this is an Ethernet packet.</p><p><img src=/images/mixpacketfilter/packet-dump.png alt="A packet dump."></p><p>Nice, so we’re mostly interested in the IP part (the source and destination address) and TCP part (Dst port 12345).</p><p>Hopefully there are some helper libraries that allow us to extract the part we’re interested in. I’ll not go through the situation &ldquo;if this was an IPv6 IP packet&rdquo;, but the program may be different.</p><p>I’m using <a href=https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf>this nice article</a> as a reference to write my program, but will use a TCP packet instead of an UDP one.</p><p>So, to start this, we need to have clear that this is a program being run almost in the wire, so we’re receiving bytes. Those bytes are represented by XDP with a struct called <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3909-L3918>xdp_md</a> and contains all the necessary data encoded. In this struct you can see fields as <code>data</code> (that represents the start of the packet), <code>data_end</code> (that represents the end of the packet) and fields that represents which was the device that the packet arrive and leaves the machine (<code>ingress_ifindex</code> and <code>egress_ifindex</code>).</p><p>But as far as I know and some folks have stated to me, XDP only works with ingressing packets, so you cannot take an action in a packet leaving the machine, other than changing it’s attributes, like the destination IP.</p><p>Based on the <a href=https://en.wikipedia.org/wiki/OSI_model>OSI Model</a> we will need to dissect the layer 2 (ethernet), shift to the layer 3 (the IP protocol) and then to the layer 4 (the TCP part) to get our information, so we’re going to code something like this to get our information:</p><div class=highlight><pre class=chroma><code class=language-cpp data-lang=cpp><span class=ln> 1</span><span class=kt>int</span> <span class=nf>myxdpprog</span><span class=p>(</span><span class=k>struct</span> <span class=nc>xdp_md</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span> <span class=c1>// Receiving the bytes in the pointer &#34;ctx&#34;
+<!doctype html><html lang=en data-figures=true class=page>
+<head>
+<title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP | The Katz Experiments</title>
+<meta charset=utf-8>
+<meta name=generator content="Hugo 0.88.1">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-177903864-1"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date),gtag('config','UA-177903864-1')</script>
+<meta property="og:locale" content="en">
+<meta property="og:type" content="article">
+<meta name=description content="In this part I'll explain briefly how eBPF + XDP works and write a simple program to log and drop packets to see where XDP fits in the stack">
+<meta name=twitter:card content="summary_large_image">
+<meta name=twitter:creator content="@rpkatz">
+<meta name=twitter:title content="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP">
+<meta property="og:url" content="https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/">
+<meta property="og:title" content="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP">
+<meta property="og:description" content="In this part I'll explain briefly how eBPF + XDP works and write a simple program to log and drop packets to see where XDP fits in the stack">
+<meta property="og:image" content="https://www.rkatz.xyz/images/thumbnail.png">
+<link rel=canonical href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/>
+<link rel=preload href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" as=style crossorigin=anonymous>
+<link rel=preload href=https://www.rkatz.xyz/js/bundle.min.14825dc619648aeca2e4e66c65ef7d06ea216e6a64cd503f64d2fe77950ee425c47fc0f2cf993c2d656f534914619a2c47c8313438a810ed5008db38a46a812d.js as=script integrity="sha512-FIJdxhlkiuyi5OZsZe99BuohbmpkzVA/ZNL+d5UO5CXEf8Dyz5k8LWVvU0kUYZosR8gxNDioEO1QCNs4pGqBLQ==" crossorigin=anonymous>
+<link rel=stylesheet type=text/css href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" crossorigin=anonymous>
+</head>
+<body data-code=100 data-lines=true id=documentTop>
+<header class=nav_header>
+<nav class=nav><a href=https://www.rkatz.xyz/ class="nav_brand nav_item" title="The Katz Experiments">The Katz Experiments
+<div class=nav_close>
+<div><svg class="icon"><use xlink:href="#open-menu"/></svg><svg class="icon"><use xlink:href="#closeme"/></svg></div>
+</div>
+</a>
+<div class="nav_body nav_body_left">
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/ class=nav_item title=Home>Home </a>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/post/rich-content/ class=nav_item title=Archives>Archives </a>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/ class=nav_item title=Links>Links <img src=https://www.rkatz.xyz/icons/caret-icon.svg alt=icon class=nav_icon></a>
+<div class=nav_sub>
+<span class=nav_child></span>
+<a href=https://www.linkedin.com/katzricardo class="nav_child nav_item" title=LinkedIn>LinkedIn</a>
+<a href=https://twitter.com/rpkatz class="nav_child nav_item" title=Twitter>Twitter</a>
+</div>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/about/ class=nav_item title=About>About </a>
+</div>
+<div class=nav_parent>
+<a href=# class=nav_item>🌐</a>
+<div class=nav_sub>
+<span class=nav_child></span>
+<a href=https://www.rkatz.xyz/ class="nav_child nav_item">English</a>
+<a href=https://www.rkatz.xyz/pt/ class="nav_child nav_item">Português</a>
+</div>
+</div>
+<div class=follow>
+<a href=https://github.com/rikatz><svg class="icon"><use xlink:href="#github"/></svg>
+</a>
+<a href=https://twitter.com/rpkatz><svg class="icon"><use xlink:href="#twitter"/></svg>
+</a>
+<a href=https://www.linkedin.com/in/katzricardo><svg class="icon"><use xlink:href="#linkedin"/></svg>
+</a>
+<a href=https://www.rkatz.xyz/index.xml><svg class="icon"><use xlink:href="#rss"/></svg>
+</a>
+<div class=color_mode>
+<input type=checkbox class=color_choice id=mode>
+</div>
+</div>
+</div>
+</nav>
+</header>
+<main>
+<div class="grid-inverse wrap content">
+<article class=post_content>
+<h1 class=post_title>The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</h1>
+<div class=post_meta>
+<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
+<span class=post_date>
+Nov 1, 2020</span>
+<span class=post_time> · 10 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/packet-filtering title="Packet filtering" class="post_tag button button_translucent">Packet filtering
+</a><a href=https://www.rkatz.xyz/tags/ebpf title=ebpf class="post_tag button button_translucent">ebpf
+</a><a href=https://www.rkatz.xyz/tags/xdp title=xdp class="post_tag button button_translucent">xdp
+</a>
+</span>
+<span class=page_only>&nbsp;·
+<div class=post_share>
+Share on:
+<a href="https://twitter.com/intent/tweet?text=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
+</a>
+<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&t=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
+</a>
+<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
+</a>
+<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
+</a>
+</div>
+</span>
+</div>
+<h2>Overview</h2>
+<nav id=TableOfContents>
+<ul>
+<li><a href=#introduction>Introduction</a></li>
+<li><a href=#what-is-ebpf>What is eBPF</a></li>
+<li><a href=#methodology>Methodology</a></li>
+<li><a href=#xdp>XDP</a></li>
+<li><a href=#compiling-and-loading-everything>Compiling and loading everything</a></li>
+<li><a href=#and-where-is-xdp-positioned>And where is XDP positioned?</a></li>
+<li><a href=#final-thoughts-and-next-steps>Final Thoughts and next steps</a></li>
+<li><a href=#references>References:</a></li>
+</ul>
+</nav>
+<h2 id=introduction>Introduction</h2>
+<p>In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.</p>
+<p>This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, but there’s plenty of materials available and I’ll put some at the end of this article.</p>
+<p><strong>Spoiler alert</strong>: As I’ve said in the previous article, I’m not a expert of eBPF, but a new learner. So expect mistakes, and provide me feedback! I do appreciate that!</p>
+<h2 id=what-is-ebpf>What is eBPF</h2>
+<p>The simplest definition I’ve seen somewhere is that eBPF is a way to run specific and confined programs within Linux Kernel, but without having to put code into the Kernel tree or developing modules.</p>
+<p>Some articles define eBPF as a &ldquo;Virtual Machine&rdquo; (in the concept of isolation, not the VMs like KVM thing) that run programs triggered by some Kernel action.</p>
+<p>As an example, imagine a system call that happens (like opening a file) and you want to trigger an action to count how many times that system call happens. Or a program that is triggered when a packet arrives on a specific network interface.</p>
+<p>Because those programs are written in C (yeah, sorry!), compiled and attached to some part of your system, eBPF needs to count with some user space area to read and write dynamic data. This area is called map, and can be manipulated while the eBPF program runs.</p>
+<p>So, for our examples, we’re going to write a really simple packet filter program, attach it to our network interface and see what and how it happens.</p>
+<p>For some more detailed explanation of eBPF, I recommend the following readings:</p>
+<ul>
+<li><a href=https://docs.cilium.io/en/v1.8/bpf/>https://docs.cilium.io/en/v1.8/bpf/</a></li>
+<li><a href=https://ebpf.io/what-is-ebpf>https://ebpf.io/what-is-ebpf</a></li>
+</ul>
+<h2 id=methodology>Methodology</h2>
+<p>The methodology is going to be pretty much the same as the previous part of the article: write a program that logs and accept (or drop) a packet in port 12345, open a <code>netcat</code> listening in this port and trigger the actions.</p>
+<p>So for the sake of this article, the <em>action</em> that is going to trigger our program is a packet arriving on the network interface, and the magic is going to happen there.</p>
+<p>eBPF have at least two ways to deal with the packet filtering, like XDP, that I’m going to cover them now, and TC that I’ll cover in some other article</p>
+<h2 id=xdp>XDP</h2>
+<p>XDP, also known as eXpress Data Path is a specific eBPF program that runs close to the Network device. It’s run even before the packet can arrive at the kernel stack.</p>
+<p>There are some network devices that support executing XDP programs directly, so yes, XDP is so powerful that you can process and take an action (like drop) a packet almost in the wire, without needing to overload your kernel.</p>
+<p>Because such a low level processing is executed, we need to first have some understanding of how a network packet is composed, so let’s assume this is an Ethernet packet.</p>
+<p><img src=/images/mixpacketfilter/packet-dump.png alt="A packet dump."></p>
+<p>Nice, so we’re mostly interested in the IP part (the source and destination address) and TCP part (Dst port 12345).</p>
+<p>Hopefully there are some helper libraries that allow us to extract the part we’re interested in. I’ll not go through the situation &ldquo;if this was an IPv6 IP packet&rdquo;, but the program may be different.</p>
+<p>I’m using <a href=https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf>this nice article</a> as a reference to write my program, but will use a TCP packet instead of an UDP one.</p>
+<p>So, to start this, we need to have clear that this is a program being run almost in the wire, so we’re receiving bytes. Those bytes are represented by XDP with a struct called <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3909-L3918>xdp_md</a> and contains all the necessary data encoded. In this struct you can see fields as <code>data</code> (that represents the start of the packet), <code>data_end</code> (that represents the end of the packet) and fields that represents which was the device that the packet arrive and leaves the machine (<code>ingress_ifindex</code> and <code>egress_ifindex</code>).</p>
+<p>But as far as I know and some folks have stated to me, XDP only works with ingressing packets, so you cannot take an action in a packet leaving the machine, other than changing it’s attributes, like the destination IP.</p>
+<p>Based on the <a href=https://en.wikipedia.org/wiki/OSI_model>OSI Model</a> we will need to dissect the layer 2 (ethernet), shift to the layer 3 (the IP protocol) and then to the layer 4 (the TCP part) to get our information, so we’re going to code something like this to get our information:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-cpp data-lang=cpp><span class=ln> 1</span><span class=kt>int</span> <span class=nf>myxdpprog</span><span class=p>(</span><span class=k>struct</span> <span class=nc>xdp_md</span> <span class=o>*</span><span class=n>ctx</span><span class=p>)</span> <span class=p>{</span> <span class=c1>// Receiving the bytes in the pointer &#34;ctx&#34;
 </span><span class=ln> 2</span><span class=c1></span>  <span class=kt>void</span> <span class=o>*</span><span class=n>data</span> <span class=o>=</span> <span class=p>(</span><span class=kt>void</span> <span class=o>*</span><span class=p>)(</span><span class=kt>long</span><span class=p>)</span><span class=n>ctx</span><span class=o>-&gt;</span><span class=n>data</span><span class=p>;</span>
 <span class=ln> 3</span>  <span class=kt>void</span> <span class=o>*</span><span class=n>data_end</span> <span class=o>=</span> <span class=p>(</span><span class=kt>void</span> <span class=o>*</span><span class=p>)(</span><span class=kt>long</span><span class=p>)</span><span class=n>ctx</span><span class=o>-&gt;</span><span class=n>data_end</span><span class=p>;</span>
 <span class=ln> 4</span>  <span class=k>struct</span> <span class=nc>ethhdr</span> <span class=o>*</span><span class=n>eth</span> <span class=o>=</span> <span class=n>data</span><span class=p>;</span>
@@ -20,7 +154,14 @@
 <span class=ln>11</span>      <span class=k>if</span> <span class=p>(</span><span class=n>ip</span><span class=o>-&gt;</span><span class=n>protocol</span> <span class=o>==</span> <span class=n>IPPROTO_TCP</span><span class=p>)</span> <span class=p>{</span>
 <span class=ln>12</span>        <span class=k>struct</span> <span class=nc>tcphdr</span> <span class=o>*</span><span class=n>tcp</span> <span class=o>=</span> <span class=p>(</span><span class=kt>void</span><span class=o>*</span><span class=p>)</span><span class=n>ip</span> <span class=o>+</span> <span class=k>sizeof</span><span class=p>(</span><span class=o>*</span><span class=n>ip</span><span class=p>);</span> <span class=c1>// And then the TCP part
 </span><span class=ln>13</span><span class=c1></span>      <span class=p>[...]</span>
-</code></pre></div><p>OK, great. So this is a bunch of uncontextualized C code, what does this mean? Exactly what is stated before: we receive the bytes, and dissect them all over as a IPv4 packet with TCP protocol.</p><p>Now that we have:</p><ul><li>An <code>ip</code> variable containing a <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/ip.h#L86-L106>iphdr</a> struct that contains fields like source (<code>saddr</code>) and destination (<code>daddr</code>) IPv4 address</li><li>A <code>tcp</code> variable containing a <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/tcp.h#L25-L27>tcphdr</a> with fields like the source (<code>source</code>) and destination (<code>dest</code>) port.</li></ul><p>Putting all this together we will have a &ldquo;simple&rdquo; program like this:</p><div class=highlight><pre class=chroma><code class=language-cpp data-lang=cpp><span class=ln> 1</span><span class=cp>#include</span> <span class=cpf>&lt;linux/bpf.h&gt;</span><span class=cp>
+</code></pre></div><p>OK, great. So this is a bunch of uncontextualized C code, what does this mean? Exactly what is stated before: we receive the bytes, and dissect them all over as a IPv4 packet with TCP protocol.</p>
+<p>Now that we have:</p>
+<ul>
+<li>An <code>ip</code> variable containing a <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/ip.h#L86-L106>iphdr</a> struct that contains fields like source (<code>saddr</code>) and destination (<code>daddr</code>) IPv4 address</li>
+<li>A <code>tcp</code> variable containing a <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/tcp.h#L25-L27>tcphdr</a> with fields like the source (<code>source</code>) and destination (<code>dest</code>) port.</li>
+</ul>
+<p>Putting all this together we will have a &ldquo;simple&rdquo; program like this:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-cpp data-lang=cpp><span class=ln> 1</span><span class=cp>#include</span> <span class=cpf>&lt;linux/bpf.h&gt;</span><span class=cp>
 </span><span class=ln> 2</span><span class=cp>#include</span> <span class=cpf>&lt;linux/if_ether.h&gt;</span><span class=cp>
 </span><span class=ln> 3</span><span class=cp>#include</span> <span class=cpf>&lt;linux/ip.h&gt;</span><span class=cp>
 </span><span class=ln> 4</span><span class=cp>#include</span> <span class=cpf>&lt;linux/tcp.h&gt;</span><span class=cp>
@@ -67,42 +208,184 @@
 <span class=ln>45</span><span class=p>}</span>
 <span class=ln>46</span>
 <span class=ln>47</span><span class=kt>char</span> <span class=n>_license</span><span class=p>[]</span> <span class=n>SEC</span><span class=p>(</span><span class=s>&#34;license&#34;</span><span class=p>)</span> <span class=o>=</span> <span class=s>&#34;GPL&#34;</span><span class=p>;</span>
-</code></pre></div><p>Wow wait! What is this all about?</p><p>OK, so first of all, eBPF programs should ALWAYS return from the function, otherwise they won’t compile. XDP programs have some <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3898-L3904>actions</a> that can be taken:</p><ul><li><code>XDP_DROP</code> - Drops the packet</li><li><code>XDP_PASS</code> - Pass the packet</li><li><code>XDP_TX</code> - Returns the packet to the interface that received it</li><li><code>XDP_REDIRECT</code> - Redirect the packet to another interface</li><li><code>XDP_ABORTED</code> - An error in the application happened, and the packet is also dropped.</li></ul><p>Also, remember the code runs as a Kernel program? This way, we cannot simply log with a printf call. Instead we need to log as a kernel program and this is what the call of <code>bpf_printk</code> does. This is a macro defined in the top of the file, and which calls <code>bpf_trace_printk</code> that is provided by the header &ldquo;&lt;bpf_helpers.h>&rdquo; which is part of libbpf and will be shown further.</p><p>The <code>SEC</code> directive is a macro that defines the program name that the &ldquo;ip command&rdquo; (you’ll see it later) looks to load into the device. You can have multiple programs in the same source code, this way you need to name them.</p><p>Also, we need to convert the integer &ldquo;12345&rdquo; to something that represents the port in the packet, so the function <a href=https://linux.die.net/man/3/ntohs>ntohs</a> is used. This is provided by the header &ldquo;netinet/in.h&rdquo;.</p><p>Finally, because we’re using the helpers functions, the license of the program MUST BE GPL, so the last line defines that.</p><h2 id=compiling-and-loading-everything>Compiling and loading everything</h2><p>OK, so we have our program. How can we use it? It needs to be compiled with and loaded in the device that is going to deal with the packets.</p><p>There’s a bunch of ways of doing this, I’ll try to keep it simple.</p><p>First of all, you need to install all the necessary tools to compile the program. You can find the dependencies for a good number of distros <a href=https://github.com/xdp-project/xdp-tutorial/blob/master/setup_dependencies.org>here</a>. In my case, I’m using an Ubuntu Server for the tests so:</p><div class=highlight><pre class=chroma><code class=language-bash data-lang=bash><span class=ln>1</span>sudo apt install clang llvm libelf-dev libpcap-dev gcc-multilib build-essential linux-tools-common linux-tools-generic
-</code></pre></div><p>Also you’ll need to download libbpf:</p><div class=highlight><pre class=chroma><code class=language-bash data-lang=bash><span class=ln>1</span>git clone https://github.com/libbpf/libbpf.git
-</code></pre></div><p>Now, to compile the program, considering it&rsquo;s source is called <code>drop12345.c</code>, simple do:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>clang -Ilibbpf/src -O2 -target bpf -c drop12345.c -o drop12345.o
-</code></pre></div><blockquote><p><em>NOTE</em>: Please be aware, I don’t know if this is the safer way to compile the program, as this is an EXAMPLE!!</p></blockquote><blockquote><p><em>NOTE2</em>: If you have errors compiling, make sure the -I argument is pointing to the libbpf/src directory, and also that you’re using the right libraries in the &ldquo;include&rdquo; directives on the C code. Also that you have all the linux kernel headers file installed :)</p></blockquote><p>And voilà! You have an object called &ldquo;drop12345.o&rdquo; that can be loaded in your network device.</p><p>So let’s do it (remember to replace <code>ens33</code> with the name of your device)</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>ip link set dev ens33 xdp obj drop12345.o sec xdpprogram
-</code></pre></div><p>Now you can try to connect to the port 12345 of your host, and see the logs with:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>sudo cat /sys/kernel/debug/tracing/trace_pipe
+</code></pre></div><p>Wow wait! What is this all about?</p>
+<p>OK, so first of all, eBPF programs should ALWAYS return from the function, otherwise they won’t compile. XDP programs have some <a href=https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/bpf.h#L3898-L3904>actions</a> that can be taken:</p>
+<ul>
+<li><code>XDP_DROP</code> - Drops the packet</li>
+<li><code>XDP_PASS</code> - Pass the packet</li>
+<li><code>XDP_TX</code> - Returns the packet to the interface that received it</li>
+<li><code>XDP_REDIRECT</code> - Redirect the packet to another interface</li>
+<li><code>XDP_ABORTED</code> - An error in the application happened, and the packet is also dropped.</li>
+</ul>
+<p>Also, remember the code runs as a Kernel program? This way, we cannot simply log with a printf call. Instead we need to log as a kernel program and this is what the call of <code>bpf_printk</code> does. This is a macro defined in the top of the file, and which calls <code>bpf_trace_printk</code> that is provided by the header &ldquo;&lt;bpf_helpers.h>&rdquo; which is part of libbpf and will be shown further.</p>
+<p>The <code>SEC</code> directive is a macro that defines the program name that the &ldquo;ip command&rdquo; (you’ll see it later) looks to load into the device. You can have multiple programs in the same source code, this way you need to name them.</p>
+<p>Also, we need to convert the integer &ldquo;12345&rdquo; to something that represents the port in the packet, so the function <a href=https://linux.die.net/man/3/ntohs>ntohs</a> is used. This is provided by the header &ldquo;netinet/in.h&rdquo;.</p>
+<p>Finally, because we’re using the helpers functions, the license of the program MUST BE GPL, so the last line defines that.</p>
+<h2 id=compiling-and-loading-everything>Compiling and loading everything</h2>
+<p>OK, so we have our program. How can we use it? It needs to be compiled with and loaded in the device that is going to deal with the packets.</p>
+<p>There’s a bunch of ways of doing this, I’ll try to keep it simple.</p>
+<p>First of all, you need to install all the necessary tools to compile the program. You can find the dependencies for a good number of distros <a href=https://github.com/xdp-project/xdp-tutorial/blob/master/setup_dependencies.org>here</a>. In my case, I’m using an Ubuntu Server for the tests so:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=ln>1</span>sudo apt install clang llvm libelf-dev libpcap-dev gcc-multilib build-essential linux-tools-common linux-tools-generic
+</code></pre></div><p>Also you’ll need to download libbpf:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-bash data-lang=bash><span class=ln>1</span>git clone https://github.com/libbpf/libbpf.git
+</code></pre></div><p>Now, to compile the program, considering it&rsquo;s source is called <code>drop12345.c</code>, simple do:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>clang -Ilibbpf/src -O2 -target bpf -c drop12345.c -o drop12345.o
+</code></pre></div><blockquote>
+<p><em>NOTE</em>: Please be aware, I don’t know if this is the safer way to compile the program, as this is an EXAMPLE!!</p>
+</blockquote>
+<blockquote>
+<p><em>NOTE2</em>: If you have errors compiling, make sure the -I argument is pointing to the libbpf/src directory, and also that you’re using the right libraries in the &ldquo;include&rdquo; directives on the C code. Also that you have all the linux kernel headers file installed :)</p>
+</blockquote>
+<p>And voilà! You have an object called &ldquo;drop12345.o&rdquo; that can be loaded in your network device.</p>
+<p>So let’s do it (remember to replace <code>ens33</code> with the name of your device)</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>ip link set dev ens33 xdp obj drop12345.o sec xdpprogram
+</code></pre></div><p>Now you can try to connect to the port 12345 of your host, and see the logs with:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>sudo cat /sys/kernel/debug/tracing/trace_pipe
 <span class=ln>2</span> &lt;idle&gt;-0     [001] ..s.  6541.153908: 0: XDP drop on TCP port 12345
 <span class=ln>3</span>[...]
-</code></pre></div><p>If you need to unload the program, simple do:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>ip link set dev ens33 xdp off
-</code></pre></div><h2 id=and-where-is-xdp-positioned>And where is XDP positioned?</h2><p>So remember when I said earlier that the XDP programs are executed before the packet can have a chance to reach the rest of kernel stack?</p><p>In the previous article, we’ve seen that nftables is positioned before iptables when dealing with filtering, so let’s load our previous nftables ruleset, and see if the packet is logged by XDP or by nftables:</p><p>Before loading the XDP program, we can see by the timestamp that nftables is dropping the packet:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>[ 6976.808976] nft-inputIN=ens33 SRC=192.168.86.1 DST=192.168.86.128 DPT=12345 
-</code></pre></div><p>But then, when the xdp program is loaded, no further log appears in nftables stack, but take a look at the timestamp of the following message:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>7237.743455: 0: XDP drop on TCP port 12345
-</code></pre></div><p>To confirm:</p><p><img src=/images/mixpacketfilter/input-xdp.png alt="The input flow with XDP."></p><p>I’m not going to make the Output test, as it’s stated that XDP is only for incoming packets. But I can try to take further tests in some later article :)</p><h2 id=final-thoughts-and-next-steps>Final Thoughts and next steps</h2><p>Right now the program is simple and static, so if you need to dynamic update it you need to change the code and recompile it. eBPF can use a structure called <code>map</code>, which can be used to &ldquo;trade&rdquo; informations between the running program and userspace, as an example dinamically feeding a program with IPs that should be blocked.</p><p><em>In my opinion</em>, the biggest issue when using eBPF is to know exactly what is being executed, as this is a static compiled program. One can compile and attach it to a network interface and if you don’t have the source code, you won’t know what is happening, while with IPTables and NFTables you can simply dump the rules.</p><p>A tool called <code>bpftool</code> can be used to show you things like &ldquo;What program is loaded in which part of the system&rdquo;, like XDP or TC (that will be covered in the next post), but still, you only know where, but not what. There was an effort to create a program called &ldquo;bpfilter&rdquo;, but it seems to be frozen right now.</p><p>Finally, XDP is not the only way that you can use eBPF programs to make packet filtering in Linux and in the next article I will cover how eBPF + TC programs works :)</p><p>Thank you for reading this, I expect to clarify a little bit this new world (also for me!) of eBPF stuff :)</p><p>And thanks for all the hard work the community has been doing making eBPF a great new technology, and also documenting! The next section have some nice references that I’ve used, but there’s a lot more materials, posts, etc.</p><h2 id=references>References:</h2><ul><li><a href=https://ebpf.io>https://ebpf.io</a></li><li><a href=https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html>https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html</a></li><li><a href=https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html>https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html</a></li><li><a href=https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf>https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf</a></li><li><a href=https://github.com/xdp-project/xdp-tutorial/>https://github.com/xdp-project/xdp-tutorial/</a></li><li><a href=https://ebpf.io>https://ebpf.io</a></li><li><a href=https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263>https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263</a></li><li><a href=https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf>https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf</a></li><li><a href=https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/>https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/</a></li><li><a href=https://docs.cilium.io/en/v1.8/bpf/>https://docs.cilium.io/en/v1.8/bpf/</a></li></ul></article><aside class=sidebar><section class=sidebar_inner><h2>Ricardo P. Katz</h2><div class=sidebar_description>SRE, does Kubernetes Stuff around there. Lego and planes addicted</div><a href=https://www.rkatz.xyz/about/ class="button mt-1" role=button title="Read More">Read More</a><h2 class=mt-4>Featured Posts</h2><ul><li><a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a></li><li><a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a></li><li><a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a></li></ul><h2 class=mt-4>Recent Posts</h2><ul class=flex-column><li><a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a></li><li><a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a></li><li><a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a></li><li><a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ class=nav-link title="Flatcar Linux in VMware Player — 5 minute command line deploy">Flatcar Linux in VMware Player — 5 minute command line deploy</a></li></ul><div><h2 class="mt-4 taxonomy" id=categories-section>Categories</h2><nav class=tags_nav><a href=https://www.rkatz.xyz/categories/technology/ class="post_tag button button_translucent" title=technology>TECHNOLOGY
-<span class=button_tally>5</span></a></nav></div><div><h2 class="mt-4 taxonomy" id=tags-section>Tags</h2><nav class=tags_nav><a href=https://www.rkatz.xyz/tags/kubernetes/ class="post_tag button button_translucent" title=kubernetes>KUBERNETES
-<span class=button_tally>3</span></a>
-<a href=https://www.rkatz.xyz/tags/ebpf/ class="post_tag button button_translucent" title=ebpf>EBPF
-<span class=button_tally>2</span></a>
-<a href=https://www.rkatz.xyz/tags/packet-filtering/ class="post_tag button button_translucent" title=packet-filtering>PACKET-FILTERING
-<span class=button_tally>2</span></a>
-<a href=https://www.rkatz.xyz/tags/automation/ class="post_tag button button_translucent" title=automation>AUTOMATION
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/falco/ class="post_tag button button_translucent" title=falco>FALCO
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/flatcar/ class="post_tag button button_translucent" title=flatcar>FLATCAR
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/freebsd/ class="post_tag button button_translucent" title=freebsd>FREEBSD
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/iptables/ class="post_tag button button_translucent" title=iptables>IPTABLES
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/k3s/ class="post_tag button button_translucent" title=k3s>K3S
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/netfilter/ class="post_tag button button_translucent" title=netfilter>NETFILTER
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/observability/ class="post_tag button button_translucent" title=observability>OBSERVABILITY
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/security/ class="post_tag button button_translucent" title=security>SECURITY
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/vmware/ class="post_tag button button_translucent" title=vmware>VMWARE
-<span class=button_tally>1</span></a>
-<a href=https://www.rkatz.xyz/tags/xdp/ class="post_tag button button_translucent" title=xdp>XDP
-<span class=button_tally>1</span></a></nav></div></section></aside></div></main><svg width="0" height="0" class="hidden"><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="facebook"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h151V331h-60v-90h60v-61c0-49.629 40.371-90 90-90h91v90h-91v61h91l-15 90h-76v181h121c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18.001 18.001" id="twitter"><path d="M15.891 4.013c.808-.496 1.343-1.173 1.605-2.034a8.68 8.68.0 01-2.351.861c-.703-.756-1.593-1.14-2.66-1.14-1.043.0-1.924.366-2.643 1.078A3.56 3.56.0 008.766 5.383c0 .309.039.585.117.819-3.076-.105-5.622-1.381-7.628-3.837-.34.601-.51 1.213-.51 1.846.0 1.301.549 2.332 1.645 3.089-.625-.053-1.176-.211-1.645-.47.0.929.273 1.705.82 2.388a3.623 3.623.0 002.115 1.291c-.312.08-.641.118-.979.118-.312.0-.533-.026-.664-.083.23.757.664 1.371 1.291 1.841a3.652 3.652.0 002.152.743C4.148 14.173 2.625 14.69.902 14.69c-.422.0-.721-.006-.902-.038 1.697 1.102 3.586 1.649 5.676 1.649 2.139.0 4.029-.542 5.674-1.626 1.645-1.078 2.859-2.408 3.639-3.974a10.77 10.77.0 001.172-4.892v-.468a7.788 7.788.0 001.84-1.921 8.142 8.142.0 01-2.11.593z"/></symbol><symbol aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="mail"><path d="M502.3 190.8c3.9-3.1 9.7-.2 9.7 4.7V4e2c0 26.5-21.5 48-48 48H48c-26.5.0-48-21.5-48-48V195.6c0-5 5.7-7.8 9.7-4.7 22.4 17.4 52.1 39.5 154.1 113.6 21.1 15.4 56.7 47.8 92.2 47.6 35.7.3 72-32.8 92.3-47.6 102-74.1 131.6-96.3 154-113.7zM256 320c23.2.4 56.6-29.2 73.4-41.4 132.7-96.3 142.8-104.7 173.4-128.7 5.8-4.5 9.2-11.5 9.2-18.9v-19c0-26.5-21.5-48-48-48H48C21.5 64 0 85.5.0 112v19c0 7.4 3.4 14.3 9.2 18.9 30.6 23.9 40.7 32.4 173.4 128.7 16.8 12.2 50.2 41.8 73.4 41.4z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="calendar"><path d="M452 40h-24V0h-40v40H124V0H84v40H60C26.916 40 0 66.916.0 1e2v352c0 33.084 26.916 60 60 60h392c33.084.0 60-26.916 60-60V1e2c0-33.084-26.916-60-60-60zm20 412c0 11.028-8.972 20-20 20H60c-11.028.0-20-8.972-20-20V188h432v264zm0-304H40v-48c0-11.028 8.972-20 20-20h24v40h40V80h264v40h40V80h24c11.028.0 20 8.972 20 20v48z"/><path d="M76 230h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 310h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 390h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80-80h40v40h-40z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="github"><path d="M255.968 5.329C114.624 5.329.0 120.401.0 262.353c0 113.536 73.344 209.856 175.104 243.872 12.8 2.368 17.472-5.568 17.472-12.384.0-6.112-.224-22.272-.352-43.712-71.2 15.52-86.24-34.464-86.24-34.464-11.616-29.696-28.416-37.6-28.416-37.6-23.264-15.936 1.728-15.616 1.728-15.616 25.696 1.824 39.2 26.496 39.2 26.496 22.848 39.264 59.936 27.936 74.528 21.344 2.304-16.608 8.928-27.936 16.256-34.368-56.832-6.496-116.608-28.544-116.608-127.008.0-28.064 9.984-51.008 26.368-68.992-2.656-6.496-11.424-32.64 2.496-68 0 0 21.504-6.912 70.4 26.336 20.416-5.696 42.304-8.544 64.096-8.64 21.728.128 43.648 2.944 64.096 8.672 48.864-33.248 70.336-26.336 70.336-26.336 13.952 35.392 5.184 61.504 2.56 68 16.416 17.984 26.304 40.928 26.304 68.992.0 98.72-59.84 120.448-116.864 126.816 9.184 7.936 17.376 23.616 17.376 47.584.0 34.368-.32 62.08-.32 70.496.0 6.88 4.608 14.88 17.6 12.352C438.72 472.145 512 375.857 512 262.353 512 120.401 397.376 5.329 255.968 5.329z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" id="gitlab"><path d="M12.3 74.7h54L43.3 3c-1-3.6-6.4-3.6-7.6.0L12.3 74.8z"/><path d="M12.3 74.7.5 111c-1 3.2.0 6.8 3 8.8l101.6 74-92.5-119z"/><path d="M105 193.7l-38.6-119h-54l92.7 119z"/><path d="M105 193.7l38.7-119H66.4l38.7 119z"/><path d="M105 193.7l38.7-119H198l-93 119z"/><path d="M198 74.7l11.6 36.2c1 3 0 6.6-3 8.6l-101.5 74 93-119z"/><path d="M198 74.7h-54.3L167 3c1.2-3.6 6.4-3.6 7.6.0L198 74.8z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="rss"><circle cx="3.429" cy="20.571" r="3.429"/><path d="M11.429 24h4.57C15.999 15.179 8.821 8.001.0 8v4.572c6.302.001 11.429 5.126 11.429 11.428z"/><path d="M24 24C24 10.766 13.234.0.0.0v4.571c10.714.0 19.43 8.714 19.43 19.429z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="linkedin"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h362c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zM181 406h-60V196h60zm0-240h-60v-60h60zm210 240h-60V286c0-16.54-13.46-30-30-30s-30 13.46-30 30v120h-60V196h60v11.309C286.719 202.422 296.93 196 316 196c40.691.043 75 36.547 75 79.688zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 612 612" id="arrow"><path d="M604.501 440.509 325.398 134.956c-5.331-5.357-12.423-7.627-19.386-7.27-6.989-.357-14.056 1.913-19.387 7.27L7.499 440.509c-9.999 10.024-9.999 26.298.0 36.323s26.223 10.024 36.222.0l262.293-287.164L568.28 476.832c9.999 10.024 26.222 10.024 36.221.0 9.999-10.023 9.999-26.298.0-36.323z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="carly"><path d="M504.971 239.029 448 182.059V84c0-46.317-37.682-84-84-84h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c19.851.0 36 16.149 36 36v108c0 6.365 2.529 12.47 7.029 16.971L454.059 256l-47.029 47.029A24.002 24.002.0 004e2 320v108c0 19.851-16.149 36-36 36h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c46.318.0 84-37.683 84-84v-98.059l56.971-56.971c9.372-9.372 9.372-24.568.0-33.941zM112 192V84c0-19.851 16.149-36 36-36h44c13.255.0 24-10.745 24-24S205.255.0 192 0h-44c-46.318.0-84 37.683-84 84v98.059l-56.971 56.97c-9.373 9.373-9.373 24.568.0 33.941L64 329.941V428c0 46.317 37.682 84 84 84h44c13.255.0 24-10.745 24-24s-10.745-24-24-24h-44c-19.851.0-36-16.149-36-36V320c0-6.365-2.529-12.47-7.029-16.971L57.941 256l47.029-47.029A24.002 24.002.0 00112 192z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="copy"><path d="M23 2.75A2.75 2.75.0 0020.25.0H8.75A2.75 2.75.0 006 2.75v13.5A2.75 2.75.0 008.75 19h11.5A2.75 2.75.0 0023 16.25zM18.25 14.5h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5z"/><path d="M8.75 20.5A4.255 4.255.0 014.5 16.25V2.75c0-.086.02-.166.025-.25H3.75A2.752 2.752.0 001 5.25v16A2.752 2.752.0 003.75 24h12a2.752 2.752.0 002.75-2.75v-.75z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512.001 512.001" id="closeme"><path d="M284.286 256.002 506.143 34.144c7.811-7.811 7.811-20.475.0-28.285-7.811-7.81-20.475-7.811-28.285.0L256 227.717 34.143 5.859c-7.811-7.811-20.475-7.811-28.285.0-7.81 7.811-7.811 20.475.0 28.285l221.857 221.857L5.858 477.859c-7.811 7.811-7.811 20.475.0 28.285a19.938 19.938.0 0014.143 5.857 19.94 19.94.0 0014.143-5.857L256 284.287l221.857 221.857c3.905 3.905 9.024 5.857 14.143 5.857s10.237-1.952 14.143-5.857c7.811-7.811 7.811-20.475.0-28.285L284.286 256.002z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="open-menu"><path d="M492 236H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0-160H20C8.954 76 0 84.954.0 96s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0 320H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="instagram"><path d="M12 2.163c3.204.0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849.0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204.0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849.0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741.0 8.333.014 7.053.072c-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948s.014 3.668.072 4.948c.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24s3.668-.014 4.948-.072c4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948s-.014-3.667-.072-4.947c-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403.0-6.162 2.759-6.162 6.162S8.597 18.163 12 18.163s6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zM12 16c-2.209.0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796.0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795.0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="youtube"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23.0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23.0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 3.993L9 16z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="stackoverflow"><path d="M21 27v-8h3v11H0V19h3v8h18z"/><path d="M17.1.2 15 1.8l7.9 10.6 2.1-1.6L17.1.2zm3.7 14.7L10.6 6.4l1.7-2 10.2 8.5-1.7 2zM7.2 12.3l12 5.6 1.1-2.4-12-5.6-1.1 2.4zm-1.8 6.8 13.56 1.96.17-2.38-13.26-2.55-.47 2.97zM19 25H5v-3h14v3z"/></symbol></svg><footer class=footer></footer><script type=text/javascript src=https://www.rkatz.xyz/js/bundle.min.8aaa68ba6ac372efc65098bfd6818bcabb389eb8d54a56d6702fd0d20644ad1c4f6787829480ed81b53ccbf0b0b70a4218076334f0e7330413b76ecf24029cbd.js integrity="sha512-iqpoumrDcu/GUJi/1oGLyrs4nrjVSlbWcC/Q0gZErRxPZ4eClIDtgbU8y/CwtwpCGAdjNPDnMwQTt27PJAKcvQ==" crossorigin=anonymous></script></body></html>
+</code></pre></div><p>If you need to unload the program, simple do:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>ip link set dev ens33 xdp off
+</code></pre></div><h2 id=and-where-is-xdp-positioned>And where is XDP positioned?</h2>
+<p>So remember when I said earlier that the XDP programs are executed before the packet can have a chance to reach the rest of kernel stack?</p>
+<p>In the previous article, we’ve seen that nftables is positioned before iptables when dealing with filtering, so let’s load our previous nftables ruleset, and see if the packet is logged by XDP or by nftables:</p>
+<p>Before loading the XDP program, we can see by the timestamp that nftables is dropping the packet:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>[ 6976.808976] nft-inputIN=ens33 SRC=192.168.86.1 DST=192.168.86.128 DPT=12345 
+</code></pre></div><p>But then, when the xdp program is loaded, no further log appears in nftables stack, but take a look at the timestamp of the following message:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>7237.743455: 0: XDP drop on TCP port 12345
+</code></pre></div><p>To confirm:</p>
+<p><img src=/images/mixpacketfilter/input-xdp.png alt="The input flow with XDP."></p>
+<p>I’m not going to make the Output test, as it’s stated that XDP is only for incoming packets. But I can try to take further tests in some later article :)</p>
+<h2 id=final-thoughts-and-next-steps>Final Thoughts and next steps</h2>
+<p>Right now the program is simple and static, so if you need to dynamic update it you need to change the code and recompile it. eBPF can use a structure called <code>map</code>, which can be used to &ldquo;trade&rdquo; informations between the running program and userspace, as an example dinamically feeding a program with IPs that should be blocked.</p>
+<p><em>In my opinion</em>, the biggest issue when using eBPF is to know exactly what is being executed, as this is a static compiled program. One can compile and attach it to a network interface and if you don’t have the source code, you won’t know what is happening, while with IPTables and NFTables you can simply dump the rules.</p>
+<p>A tool called <code>bpftool</code> can be used to show you things like &ldquo;What program is loaded in which part of the system&rdquo;, like XDP or TC (that will be covered in the next post), but still, you only know where, but not what. There was an effort to create a program called &ldquo;bpfilter&rdquo;, but it seems to be frozen right now.</p>
+<p>Finally, XDP is not the only way that you can use eBPF programs to make packet filtering in Linux and in the next article I will cover how eBPF + TC programs works :)</p>
+<p>Thank you for reading this, I expect to clarify a little bit this new world (also for me!) of eBPF stuff :)</p>
+<p>And thanks for all the hard work the community has been doing making eBPF a great new technology, and also documenting! The next section have some nice references that I’ve used, but there’s a lot more materials, posts, etc.</p>
+<h2 id=references>References:</h2>
+<ul>
+<li><a href=https://ebpf.io>https://ebpf.io</a></li>
+<li><a href=https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html>https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html</a></li>
+<li><a href=https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html>https://toonk.io/building-an-xdp-express-data-path-based-bgp-peering-router/index.html</a></li>
+<li><a href=https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf>https://duo.com/labs/tech-notes/writing-an-xdp-network-filter-with-ebpf</a></li>
+<li><a href=https://github.com/xdp-project/xdp-tutorial/>https://github.com/xdp-project/xdp-tutorial/</a></li>
+<li><a href=https://ebpf.io>https://ebpf.io</a></li>
+<li><a href=https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263>https://medium.com/@fntlnz/load-xdp-programs-using-the-ip-iproute2-command-502043898263</a></li>
+<li><a href=https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf>https://www.winet.dcc.ufmg.br/ebpf/processamento_rapido_de_pacotes_com_ebpf_e_xdp.pdf</a></li>
+<li><a href=https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/>https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/</a></li>
+<li><a href=https://docs.cilium.io/en/v1.8/bpf/>https://docs.cilium.io/en/v1.8/bpf/</a></li>
+</ul>
+</article>
+<aside class=sidebar>
+<section class=sidebar_inner>
+<h2>Ricardo P. Katz</h2>
+<div class=author_bio>
+SRE, does Kubernetes Stuff around there. Lego and planes addicted
+</div>
+<a href=https://www.rkatz.xyz/about/ class="button mt-1" role=button title="Read More">Read More</a>
+<h2 class=mt-4>Featured Posts</h2>
+<ul>
+<li>
+<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a>
+</li>
+</ul>
+<h2 class=mt-4>Recent Posts</h2>
+<ul class=flex-column>
+<li>
+<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ class=nav-link title="Flatcar Linux in VMware Player — 5 minute command line deploy">Flatcar Linux in VMware Player — 5 minute command line deploy</a>
+</li>
+</ul>
+<div>
+<h2 class="mt-4 taxonomy" id=categories-section>Categories</h2>
+<nav class=tags_nav>
+<a href=https://www.rkatz.xyz/categories/technology/ class="post_tag button button_translucent" title=technology>
+TECHNOLOGY
+<span class=button_tally>5</span>
+</a>
+</nav>
+</div>
+<div>
+<h2 class="mt-4 taxonomy" id=tags-section>Tags</h2>
+<nav class=tags_nav>
+<a href=https://www.rkatz.xyz/tags/kubernetes/ class="post_tag button button_translucent" title=kubernetes>
+KUBERNETES
+<span class=button_tally>3</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/ebpf/ class="post_tag button button_translucent" title=ebpf>
+EBPF
+<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/packet-filtering/ class="post_tag button button_translucent" title=packet-filtering>
+PACKET-FILTERING
+<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/automation/ class="post_tag button button_translucent" title=automation>
+AUTOMATION
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/falco/ class="post_tag button button_translucent" title=falco>
+FALCO
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/flatcar/ class="post_tag button button_translucent" title=flatcar>
+FLATCAR
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/freebsd/ class="post_tag button button_translucent" title=freebsd>
+FREEBSD
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/iptables/ class="post_tag button button_translucent" title=iptables>
+IPTABLES
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/k3s/ class="post_tag button button_translucent" title=k3s>
+K3S
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/netfilter/ class="post_tag button button_translucent" title=netfilter>
+NETFILTER
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/observability/ class="post_tag button button_translucent" title=observability>
+OBSERVABILITY
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/security/ class="post_tag button button_translucent" title=security>
+SECURITY
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/vmware/ class="post_tag button button_translucent" title=vmware>
+VMWARE
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/xdp/ class="post_tag button button_translucent" title=xdp>
+XDP
+<span class=button_tally>1</span>
+</a>
+</nav>
+</div>
+</section>
+</aside>
+</div>
+</main><svg width="0" height="0" class="hidden"><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="facebook"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h151V331h-60v-90h60v-61c0-49.629 40.371-90 90-90h91v90h-91v61h91l-15 90h-76v181h121c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18.001 18.001" id="twitter"><path d="M15.891 4.013c.808-.496 1.343-1.173 1.605-2.034a8.68 8.68.0 01-2.351.861c-.703-.756-1.593-1.14-2.66-1.14-1.043.0-1.924.366-2.643 1.078A3.56 3.56.0 008.766 5.383c0 .309.039.585.117.819-3.076-.105-5.622-1.381-7.628-3.837-.34.601-.51 1.213-.51 1.846.0 1.301.549 2.332 1.645 3.089-.625-.053-1.176-.211-1.645-.47.0.929.273 1.705.82 2.388a3.623 3.623.0 002.115 1.291c-.312.08-.641.118-.979.118-.312.0-.533-.026-.664-.083.23.757.664 1.371 1.291 1.841a3.652 3.652.0 002.152.743C4.148 14.173 2.625 14.69.902 14.69c-.422.0-.721-.006-.902-.038 1.697 1.102 3.586 1.649 5.676 1.649 2.139.0 4.029-.542 5.674-1.626 1.645-1.078 2.859-2.408 3.639-3.974a10.77 10.77.0 001.172-4.892v-.468a7.788 7.788.0 001.84-1.921 8.142 8.142.0 01-2.11.593z"/></symbol><symbol aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="mail"><path d="M502.3 190.8c3.9-3.1 9.7-.2 9.7 4.7V4e2c0 26.5-21.5 48-48 48H48c-26.5.0-48-21.5-48-48V195.6c0-5 5.7-7.8 9.7-4.7 22.4 17.4 52.1 39.5 154.1 113.6 21.1 15.4 56.7 47.8 92.2 47.6 35.7.3 72-32.8 92.3-47.6 102-74.1 131.6-96.3 154-113.7zM256 320c23.2.4 56.6-29.2 73.4-41.4 132.7-96.3 142.8-104.7 173.4-128.7 5.8-4.5 9.2-11.5 9.2-18.9v-19c0-26.5-21.5-48-48-48H48C21.5 64 0 85.5.0 112v19c0 7.4 3.4 14.3 9.2 18.9 30.6 23.9 40.7 32.4 173.4 128.7 16.8 12.2 50.2 41.8 73.4 41.4z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="calendar"><path d="M452 40h-24V0h-40v40H124V0H84v40H60C26.916 40 0 66.916.0 1e2v352c0 33.084 26.916 60 60 60h392c33.084.0 60-26.916 60-60V1e2c0-33.084-26.916-60-60-60zm20 412c0 11.028-8.972 20-20 20H60c-11.028.0-20-8.972-20-20V188h432v264zm0-304H40v-48c0-11.028 8.972-20 20-20h24v40h40V80h264v40h40V80h24c11.028.0 20 8.972 20 20v48z"/><path d="M76 230h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 310h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 390h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80-80h40v40h-40z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="github"><path d="M255.968 5.329C114.624 5.329.0 120.401.0 262.353c0 113.536 73.344 209.856 175.104 243.872 12.8 2.368 17.472-5.568 17.472-12.384.0-6.112-.224-22.272-.352-43.712-71.2 15.52-86.24-34.464-86.24-34.464-11.616-29.696-28.416-37.6-28.416-37.6-23.264-15.936 1.728-15.616 1.728-15.616 25.696 1.824 39.2 26.496 39.2 26.496 22.848 39.264 59.936 27.936 74.528 21.344 2.304-16.608 8.928-27.936 16.256-34.368-56.832-6.496-116.608-28.544-116.608-127.008.0-28.064 9.984-51.008 26.368-68.992-2.656-6.496-11.424-32.64 2.496-68 0 0 21.504-6.912 70.4 26.336 20.416-5.696 42.304-8.544 64.096-8.64 21.728.128 43.648 2.944 64.096 8.672 48.864-33.248 70.336-26.336 70.336-26.336 13.952 35.392 5.184 61.504 2.56 68 16.416 17.984 26.304 40.928 26.304 68.992.0 98.72-59.84 120.448-116.864 126.816 9.184 7.936 17.376 23.616 17.376 47.584.0 34.368-.32 62.08-.32 70.496.0 6.88 4.608 14.88 17.6 12.352C438.72 472.145 512 375.857 512 262.353 512 120.401 397.376 5.329 255.968 5.329z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" id="gitlab"><path d="M12.3 74.7h54L43.3 3c-1-3.6-6.4-3.6-7.6.0L12.3 74.8z"/><path d="M12.3 74.7.5 111c-1 3.2.0 6.8 3 8.8l101.6 74-92.5-119z"/><path d="M105 193.7l-38.6-119h-54l92.7 119z"/><path d="M105 193.7l38.7-119H66.4l38.7 119z"/><path d="M105 193.7l38.7-119H198l-93 119z"/><path d="M198 74.7l11.6 36.2c1 3 0 6.6-3 8.6l-101.5 74 93-119z"/><path d="M198 74.7h-54.3L167 3c1.2-3.6 6.4-3.6 7.6.0L198 74.8z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="rss"><circle cx="3.429" cy="20.571" r="3.429"/><path d="M11.429 24h4.57C15.999 15.179 8.821 8.001.0 8v4.572c6.302.001 11.429 5.126 11.429 11.428z"/><path d="M24 24C24 10.766 13.234.0.0.0v4.571c10.714.0 19.43 8.714 19.43 19.429z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="linkedin"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h362c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zM181 406h-60V196h60zm0-240h-60v-60h60zm210 240h-60V286c0-16.54-13.46-30-30-30s-30 13.46-30 30v120h-60V196h60v11.309C286.719 202.422 296.93 196 316 196c40.691.043 75 36.547 75 79.688zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 612 612" id="arrow"><path d="M604.501 440.509 325.398 134.956c-5.331-5.357-12.423-7.627-19.386-7.27-6.989-.357-14.056 1.913-19.387 7.27L7.499 440.509c-9.999 10.024-9.999 26.298.0 36.323s26.223 10.024 36.222.0l262.293-287.164L568.28 476.832c9.999 10.024 26.222 10.024 36.221.0 9.999-10.023 9.999-26.298.0-36.323z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="carly"><path d="M504.971 239.029 448 182.059V84c0-46.317-37.682-84-84-84h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c19.851.0 36 16.149 36 36v108c0 6.365 2.529 12.47 7.029 16.971L454.059 256l-47.029 47.029A24.002 24.002.0 004e2 320v108c0 19.851-16.149 36-36 36h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c46.318.0 84-37.683 84-84v-98.059l56.971-56.971c9.372-9.372 9.372-24.568.0-33.941zM112 192V84c0-19.851 16.149-36 36-36h44c13.255.0 24-10.745 24-24S205.255.0 192 0h-44c-46.318.0-84 37.683-84 84v98.059l-56.971 56.97c-9.373 9.373-9.373 24.568.0 33.941L64 329.941V428c0 46.317 37.682 84 84 84h44c13.255.0 24-10.745 24-24s-10.745-24-24-24h-44c-19.851.0-36-16.149-36-36V320c0-6.365-2.529-12.47-7.029-16.971L57.941 256l47.029-47.029A24.002 24.002.0 00112 192z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="copy"><path d="M23 2.75A2.75 2.75.0 0020.25.0H8.75A2.75 2.75.0 006 2.75v13.5A2.75 2.75.0 008.75 19h11.5A2.75 2.75.0 0023 16.25zM18.25 14.5h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5z"/><path d="M8.75 20.5A4.255 4.255.0 014.5 16.25V2.75c0-.086.02-.166.025-.25H3.75A2.752 2.752.0 001 5.25v16A2.752 2.752.0 003.75 24h12a2.752 2.752.0 002.75-2.75v-.75z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512.001 512.001" id="closeme"><path d="M284.286 256.002 506.143 34.144c7.811-7.811 7.811-20.475.0-28.285-7.811-7.81-20.475-7.811-28.285.0L256 227.717 34.143 5.859c-7.811-7.811-20.475-7.811-28.285.0-7.81 7.811-7.811 20.475.0 28.285l221.857 221.857L5.858 477.859c-7.811 7.811-7.811 20.475.0 28.285a19.938 19.938.0 0014.143 5.857 19.94 19.94.0 0014.143-5.857L256 284.287l221.857 221.857c3.905 3.905 9.024 5.857 14.143 5.857s10.237-1.952 14.143-5.857c7.811-7.811 7.811-20.475.0-28.285L284.286 256.002z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="open-menu"><path d="M492 236H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0-160H20C8.954 76 0 84.954.0 96s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0 320H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="instagram"><path d="M12 2.163c3.204.0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849.0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204.0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849.0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741.0 8.333.014 7.053.072c-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948s.014 3.668.072 4.948c.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24s3.668-.014 4.948-.072c4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948s-.014-3.667-.072-4.947c-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403.0-6.162 2.759-6.162 6.162S8.597 18.163 12 18.163s6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zM12 16c-2.209.0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796.0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795.0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="youtube"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23.0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23.0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 3.993L9 16z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="stackoverflow"><path d="M21 27v-8h3v11H0V19h3v8h18z"/><path d="M17.1.2 15 1.8l7.9 10.6 2.1-1.6L17.1.2zm3.7 14.7L10.6 6.4l1.7-2 10.2 8.5-1.7 2zM7.2 12.3l12 5.6 1.1-2.4-12-5.6-1.1 2.4zm-1.8 6.8 13.56 1.96.17-2.38-13.26-2.55-.47 2.97zM19 25H5v-3h14v3z"/></symbol></svg>
+<footer class=footer>
+</footer>
+<script type=text/javascript src=https://www.rkatz.xyz/js/bundle.min.14825dc619648aeca2e4e66c65ef7d06ea216e6a64cd503f64d2fe77950ee425c47fc0f2cf993c2d656f534914619a2c47c8313438a810ed5008db38a46a812d.js integrity="sha512-FIJdxhlkiuyi5OZsZe99BuohbmpkzVA/ZNL+d5UO5CXEf8Dyz5k8LWVvU0kUYZosR8gxNDioEO1QCNs4pGqBLQ==" crossorigin=anonymous></script>
+</body>
+</html>
