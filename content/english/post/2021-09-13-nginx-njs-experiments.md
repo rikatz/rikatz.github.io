@@ -1,6 +1,6 @@
 ---
 title: "NGINX NJS Experiments - Dynamic Backends"
-date: 2021-09-13T23:00:00-03:00
+date: 2021-09-12T23:00:00-03:00
 draft: false
 description: "Exploring NGINX NJS Dynamic Backends and some fun"
 featured: true # Sets if post is a featured post, making appear on the home page side bar.
@@ -30,19 +30,19 @@ The reason I decided to do that is a simple question I did to myself: "can we do
 
 For this article, I will reproduce the most used Lua part of Ingress NGINX: dynamic upstreams. Not as complete as the real one, or with all features, but just for fun.
 
-I will put all of the experiments here in [github.com/rikatz/njs-experiments]
+I will put all of the experiments here in https://github.com/rikatz/njs-experiments
 
 # NGINX NJS scripting language
 Back to 2015 (I guess…) NGINX Inc announced a new feature in NGINX, called ngiScript, which turned later into NJS. NJS allows one to write the behavior of NGINX based on Javascript language.
 
-It's not as wide as the whole Javascript language but still allows one to do some cool things. There are some few examples [here](https://nginx.org/en/docs/njs/examples.html) and [here](https://github.com/xeioex/njs-examples) like creating some JWT signing or even an S3 Gateway'ish. You may find more examples in https://www.nginx.com/blog/tag/nginx-javascript-module/ and also googling around there about people using NJS as an antispam bot, etc.
+It's not as wide as the whole Javascript language but still allows one to do some cool things. There are some few examples [here](https://nginx.org/en/docs/njs/examples.html) and [here](https://github.com/xeioex/njs-examples) like creating some JWT signing or even an [S3 Gateway'ish](https://github.com/nginxinc/nginx-s3-gateway/). You may find more examples in https://www.nginx.com/blog/tag/nginx-javascript-module/ and also googling around there about people using NJS as an antispam bot, etc.
 
 Overall, you need to think on NJS by some perspectives:
 * It is NOT as complete as Lua. You can vendor some external [nodejs modules](https://nginx.org/en/docs/njs/node_modules.html) but do you really wanna download half the internet to process something? (npm joke here...sorry…)
 * For ever request that your server needs to deal with, it creates a small thread to run your javascript. It is pretty fast, but still you may end adding some latency in the processing of your requests. I haven't tested it (yet!) to see the performance differences between Lua x NJS.
 * NJS is a core module from NGINX. While to make Lua work you need some Openresty external stuff, LuaJIT and other things that can go wrong, NJS is part of Nginx code. It's not installed as default, but you can simple download it from official NGINX package repo (or compile), and its version relates to the version you are using in NGINX (while with Openresty you are sort of stuck with previous versions, like v1.19, although we use it with NGINX v1.20 in Ingress NGINX).
 
-See more here: [https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/]
+See more here: https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/
 
 # Starting simple
 
@@ -257,6 +257,8 @@ www.rkatz.xyz
 Now calling myserver:80/ will proxy to www.rkatz.xyz, while calling myserver:80/otherlocation will randomize calls between the endpoints in file `rkatz-nginx2-80`.
 
 If I call myserver:80/otherlocation1, I will end up with an error of `Invalid backend` as no `ingress_service` variable is being set for that location.
+
+Oh, and if we change the content of the files, it can dinamically point to different backends. No need to restart stuff :)
 
 # Some conclusions
 
