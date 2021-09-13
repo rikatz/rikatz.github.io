@@ -303,6 +303,7 @@ etc/nginx.conf</li>
 <div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>www.rkatz.xyz
 </code></pre></div><p>Now calling myserver:80/ will proxy to <a href=http://www.rkatz.xyz>www.rkatz.xyz</a>, while calling myserver:80/otherlocation will randomize calls between the endpoints in file <code>rkatz-nginx2-80</code>.</p>
 <p>If I call myserver:80/otherlocation1, I will end up with an error of <code>Invalid backend</code> as no <code>ingress_service</code> variable is being set for that location.</p>
+<p>Oh, and if we change the content of the files, it can dinamically point to different backends. No need to restart stuff :)</p>
 <h1 id=some-conclusions>Some conclusions</h1>
 <p>NJS have a lot of potential to offload some dynamic reconfiguration needs in Ingress NGINX and other services.</p>
 <p>While it still have some concerns about the community, the features are pretty nice and easy to develop, using common javascript and can also be used to implement some &ldquo;FaaS&rdquo; on the edge, for example.</p>
