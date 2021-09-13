@@ -1,6 +1,6 @@
-<!doctype html><html lang=en data-figures class=home>
+<!doctype html><html lang=en data-figures>
 <head>
-<title>The Katz Experiments</title>
+<title>Ingress | The Katz Experiments</title>
 <meta charset=utf-8>
 <meta name=generator content="Hugo 0.88.1">
 <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -8,17 +8,16 @@
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-177903864-1"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date),gtag('config','UA-177903864-1')</script>
 <meta property="og:locale" content="en">
-<meta property="og:locale:alternate" content="pt">
-<meta property="og:type" content="website">
-<meta name=description content="Those are my personal studies, articles, tests, etc, hoping to help other people in Kubernetes journey.">
+<meta property="og:type" content="article">
+<meta name=description content>
 <meta name=twitter:card content="summary_large_image">
 <meta name=twitter:creator content="@rpkatz">
-<meta name=twitter:title content>
-<meta property="og:url" content="https://www.rkatz.xyz/">
-<meta property="og:title" content>
-<meta property="og:description" content="Those are my personal studies, articles, tests, etc, hoping to help other people in Kubernetes journey.">
+<meta name=twitter:title content="Ingress">
+<meta property="og:url" content="https://www.rkatz.xyz/tags/ingress/">
+<meta property="og:title" content="Ingress">
+<meta property="og:description" content>
 <meta property="og:image" content="https://www.rkatz.xyz/images/thumbnail.png">
-<link rel=canonical href=https://www.rkatz.xyz/>
+<link rel=canonical href=https://www.rkatz.xyz/tags/ingress/>
 <link rel=preload href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" as=style crossorigin=anonymous>
 <link rel=preload href=https://www.rkatz.xyz/js/bundle.min.14825dc619648aeca2e4e66c65ef7d06ea216e6a64cd503f64d2fe77950ee425c47fc0f2cf993c2d656f534914619a2c47c8313438a810ed5008db38a46a812d.js as=script integrity="sha512-FIJdxhlkiuyi5OZsZe99BuohbmpkzVA/ZNL+d5UO5CXEf8Dyz5k8LWVvU0kUYZosR8gxNDioEO1QCNs4pGqBLQ==" crossorigin=anonymous>
 <link rel=stylesheet type=text/css href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" crossorigin=anonymous>
@@ -31,13 +30,13 @@
 </div>
 </a>
 <div class="nav_body nav_body_left">
-<div class="nav_parent nav_active">
+<div class=nav_parent>
 <a href=https://www.rkatz.xyz/ class=nav_item title=Home>Home </a>
 </div>
 <div class=nav_parent>
 <a href=https://www.rkatz.xyz/post/rich-content/ class=nav_item title=Archives>Archives </a>
 </div>
-<div class="nav_parent nav_active">
+<div class=nav_parent>
 <a href=https://www.rkatz.xyz/ class=nav_item title=Links>Links <img src=https://www.rkatz.xyz/icons/caret-icon.svg alt=icon class=nav_icon></a>
 <div class=nav_sub>
 <span class=nav_child></span>
@@ -111,214 +110,6 @@ NGINX NJS and the dynamic config Recently, due to some bugs in Ingress NGINX I h
 For those not familiar with Ingress NGINX dynamic configuration, it relies massively on Lua and Openresty components to allow the reconfiguration of backends …
 </p>
 <a href=https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/ title="Read More" class="excerpt_more button">Read More</a>
-</div>
-</div>
-</div>
-</li>
-<li class=post_item>
-<div class=excerpt>
-<div class=excerpt_header>
-<h3 class=post_link>
-<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a>
-</h3>
-<div class=post_meta>
-<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
-<span class=post_date>
-Apr 16, 2021</span>
-<span class=post_time> · 10 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/kubernetes title=Kubernetes class="post_tag button button_translucent">Kubernetes
-</a><a href=https://www.rkatz.xyz/tags/falco title=Falco class="post_tag button button_translucent">Falco
-</a><a href=https://www.rkatz.xyz/tags/security title=Security class="post_tag button button_translucent">Security
-</a><a href=https://www.rkatz.xyz/tags/observability title=Observability class="post_tag button button_translucent">Observability
-</a>
-</span>
-<span class=page_only>&nbsp;·
-<div class=post_share>
-Share on:
-<a href="https://twitter.com/intent/tweet?text=Using%20Falco%20to%20monitor%20outbound%20traffic%20for%20Pods%20in%20Kubernetes&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2021-04-16-falco-network-monitoring%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
-</a>
-<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2021-04-16-falco-network-monitoring%2f&t=Using%20Falco%20to%20monitor%20outbound%20traffic%20for%20Pods%20in%20Kubernetes" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
-</a>
-<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
-</a>
-<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
-</a>
-</div>
-</span>
-</div>
-</div>
-<div class=excerpt_footer>
-<div>
-<p class=pale>
-Using Falco to monitor outbound traffic for Pods in Kubernetes Falco is an opensource project from Sysdig focused on container runtime and cloud native security, that uses modern technologies like eBPF to monitor environment situations using syscalls and other events sources
-We&rsquo;ve used Falco some time ago as a …
-</p>
-<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ title="Read More" class="excerpt_more button">Read More</a>
-</div>
-</div>
-</div>
-</li>
-<li class=post_item>
-<div class=excerpt>
-<div class=excerpt_header>
-<h3 class=post_link>
-<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a>
-</h3>
-<div class=post_meta>
-<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
-<span class=post_date>
-Dec 30, 2020</span>
-<span class=post_time> · 6 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/freebsd title=FreeBSD class="post_tag button button_translucent">FreeBSD
-</a><a href=https://www.rkatz.xyz/tags/kubernetes title=kubernetes class="post_tag button button_translucent">kubernetes
-</a><a href=https://www.rkatz.xyz/tags/k3s title=k3s class="post_tag button button_translucent">k3s
-</a>
-</span>
-<span class=page_only>&nbsp;·
-<div class=post_share>
-Share on:
-<a href="https://twitter.com/intent/tweet?text=Kubernetes%20Control%20Plane%20natively%20on%20FreeBSD%20with%20K3s&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-12-30-k8s-control-plane-fbsd-k3s%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
-</a>
-<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-12-30-k8s-control-plane-fbsd-k3s%2f&t=Kubernetes%20Control%20Plane%20natively%20on%20FreeBSD%20with%20K3s" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
-</a>
-<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
-</a>
-<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
-</a>
-</div>
-</span>
-</div>
-</div>
-<div class=excerpt_footer>
-<div>
-<p class=pale>
-Introduction I&rsquo;ve been trying, on the past few days make Kubernetes usable on FreeBSD. Why? Some would say I like to suffer. Others would say I have much spare time.
-To be honest, I&rsquo;m doing this for fun. FreeBSD, for me, is one of the most stable and performant Operating Systems, and it&rsquo;s sad that we …
-</p>
-<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ title="Read More" class="excerpt_more button">Read More</a>
-</div>
-</div>
-</div>
-</li>
-<li class=post_item>
-<div class=excerpt>
-<div class=excerpt_header>
-<h3 class=post_link>
-<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ title="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP">The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</a>
-</h3>
-<div class=post_meta>
-<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
-<span class=post_date>
-Nov 1, 2020</span>
-<span class=post_time> · 10 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/packet-filtering title="Packet filtering" class="post_tag button button_translucent">Packet filtering
-</a><a href=https://www.rkatz.xyz/tags/ebpf title=ebpf class="post_tag button button_translucent">ebpf
-</a><a href=https://www.rkatz.xyz/tags/xdp title=xdp class="post_tag button button_translucent">xdp
-</a>
-</span>
-<span class=page_only>&nbsp;·
-<div class=post_share>
-Share on:
-<a href="https://twitter.com/intent/tweet?text=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
-</a>
-<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-11-01-the-mix-of-packet-filter-ebpf-xdp%2f&t=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20in%20Linux%20Part%202%20-%20eBPF%20%2b%20XDP" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
-</a>
-<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
-</a>
-<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
-</a>
-</div>
-</span>
-</div>
-</div>
-<div class=excerpt_footer>
-<div>
-<p class=pale>
-Introduction In the first part of this article, I’ve shown the most common (so far) methods of doing packet filtering in Linux.
-This part of the article is all dedicated to cover a brief introduction of eBPF and XDP, being used to packet filtering. I’ll not cover the usage of eBPF to monitor resources and performance, …
-</p>
-<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ title="Read More" class="excerpt_more button">Read More</a>
-</div>
-</div>
-</div>
-</li>
-<li class=post_item>
-<div class=excerpt>
-<div class=excerpt_header>
-<h3 class=post_link>
-<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a>
-</h3>
-<div class=post_meta>
-<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
-<span class=post_date>
-Sep 13, 2020</span>
-<span class=post_time> · 9 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/packet-filtering title="Packet filtering" class="post_tag button button_translucent">Packet filtering
-</a><a href=https://www.rkatz.xyz/tags/iptables title=iptables class="post_tag button button_translucent">iptables
-</a><a href=https://www.rkatz.xyz/tags/netfilter title=netfilter class="post_tag button button_translucent">netfilter
-</a><a href=https://www.rkatz.xyz/tags/ebpf title=ebpf class="post_tag button button_translucent">ebpf
-</a><a href=https://www.rkatz.xyz/tags/kubernetes title=Kubernetes class="post_tag button button_translucent">Kubernetes
-</a>
-</span>
-<span class=page_only>&nbsp;·
-<div class=post_share>
-Share on:
-<a href="https://twitter.com/intent/tweet?text=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20Linux%20-%20Part%201&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-09-13-the-mix-of-packet-filter-linux-part1%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
-</a>
-<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-09-13-the-mix-of-packet-filter-linux-part1%2f&t=The%20mix%20%28and%20mess%29%20of%20Packet%20Filter%20Linux%20-%20Part%201" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
-</a>
-<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
-</a>
-<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
-</a>
-</div>
-</span>
-</div>
-</div>
-<div class=excerpt_footer>
-<div>
-<p class=pale>
-Introduction So you’ve got a brand new Linux distribution. You start your Kubernetes distributions, and decide for a specific CNI that provides network policies.
-Then you figure out that something is (or is not) working, does an iptables -L to check what is going on and boom: where are all my iptables rules? Worst of …
-</p>
-<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ title="Read More" class="excerpt_more button">Read More</a>
-</div>
-</div>
-</div>
-</li>
-<li class=post_item>
-<div class=excerpt>
-<div class=excerpt_header>
-<h3 class=post_link>
-<a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ title="Flatcar Linux in VMware Player — 5 minute command line deploy">Flatcar Linux in VMware Player — 5 minute command line deploy</a>
-</h3>
-<div class=post_meta>
-<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
-<span class=post_date>
-Sep 13, 2020</span>
-<span class=post_time> · 4 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/flatcar title=Flatcar class="post_tag button button_translucent">Flatcar
-</a><a href=https://www.rkatz.xyz/tags/vmware title=VMWare class="post_tag button button_translucent">VMWare
-</a><a href=https://www.rkatz.xyz/tags/automation title=Automation class="post_tag button button_translucent">Automation
-</a>
-</span>
-<span class=page_only>&nbsp;·
-<div class=post_share>
-Share on:
-<a href="https://twitter.com/intent/tweet?text=Flatcar%20Linux%20in%20VMware%20Player%20%e2%80%94%205%20minute%20command%20line%20deploy&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-09-13-flatcar%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
-</a>
-<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2020-09-13-flatcar%2f&t=Flatcar%20Linux%20in%20VMware%20Player%20%e2%80%94%205%20minute%20command%20line%20deploy" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
-</a>
-<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
-</a>
-<a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
-</a>
-</div>
-</span>
-</div>
-</div>
-<div class=excerpt_footer>
-<div>
-<p class=pale>
-So I needed to create a new Kubernetes Lab. Back in time, I’ve created a shell script to deploy a lot of CoreOS servers to my VMware Player, but I hadn’t touched that script since that time.
-With the deprecation of CoreOS and the glorious rise of Flatcar Linux to save us, and while needing to test some stuffs in …
-</p>
-<a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ title="Read More" class="excerpt_more button">Read More</a>
 </div>
 </div>
 </div>

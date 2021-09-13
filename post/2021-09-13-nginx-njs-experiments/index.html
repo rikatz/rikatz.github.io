@@ -1,0 +1,469 @@
+<!doctype html><html lang=en data-figures=true class=page>
+<head>
+<title>NGINX NJS Experiments - Dynamic Backends | The Katz Experiments</title>
+<meta charset=utf-8>
+<meta name=generator content="Hugo 0.88.1">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-177903864-1"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date),gtag('config','UA-177903864-1')</script>
+<meta property="og:locale" content="en">
+<meta property="og:type" content="article">
+<meta name=description content="Exploring NGINX NJS Dynamic Backends and some fun">
+<meta name=twitter:card content="summary_large_image">
+<meta name=twitter:creator content="@rpkatz">
+<meta name=twitter:title content="NGINX NJS Experiments - Dynamic Backends">
+<meta property="og:url" content="https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/">
+<meta property="og:title" content="NGINX NJS Experiments - Dynamic Backends">
+<meta property="og:description" content="Exploring NGINX NJS Dynamic Backends and some fun">
+<meta property="og:image" content="https://www.rkatz.xyz/images/thumbnail.png">
+<link rel=canonical href=https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/>
+<link rel=preload href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" as=style crossorigin=anonymous>
+<link rel=preload href=https://www.rkatz.xyz/js/bundle.min.14825dc619648aeca2e4e66c65ef7d06ea216e6a64cd503f64d2fe77950ee425c47fc0f2cf993c2d656f534914619a2c47c8313438a810ed5008db38a46a812d.js as=script integrity="sha512-FIJdxhlkiuyi5OZsZe99BuohbmpkzVA/ZNL+d5UO5CXEf8Dyz5k8LWVvU0kUYZosR8gxNDioEO1QCNs4pGqBLQ==" crossorigin=anonymous>
+<link rel=stylesheet type=text/css href=https://www.rkatz.xyz/css/styles.ee3b9488ef041710052f5c22837bf044d13ac251377aac559881157179229b04be4ae0027ad7b3c9b0cf469d0b37c82b8fcc5956709efe67b73f0e08a76bba3d.css integrity="sha512-7juUiO8EFxAFL1wig3vwRNE6wlE3eqxVmIEVcXkimwS+SuACetezybDPRp0LN8grj8xZVnCe/me3Pw4Ip2u6PQ==" crossorigin=anonymous>
+</head>
+<body data-code=100 data-lines=true id=documentTop>
+<header class=nav_header>
+<nav class=nav><a href=https://www.rkatz.xyz/ class="nav_brand nav_item" title="The Katz Experiments">The Katz Experiments
+<div class=nav_close>
+<div><svg class="icon"><use xlink:href="#open-menu"/></svg><svg class="icon"><use xlink:href="#closeme"/></svg></div>
+</div>
+</a>
+<div class="nav_body nav_body_left">
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/ class=nav_item title=Home>Home </a>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/post/rich-content/ class=nav_item title=Archives>Archives </a>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/ class=nav_item title=Links>Links <img src=https://www.rkatz.xyz/icons/caret-icon.svg alt=icon class=nav_icon></a>
+<div class=nav_sub>
+<span class=nav_child></span>
+<a href=https://www.linkedin.com/katzricardo class="nav_child nav_item" title=LinkedIn>LinkedIn</a>
+<a href=https://twitter.com/rpkatz class="nav_child nav_item" title=Twitter>Twitter</a>
+</div>
+</div>
+<div class=nav_parent>
+<a href=https://www.rkatz.xyz/about/ class=nav_item title=About>About </a>
+</div>
+<div class=nav_parent>
+<a href=# class=nav_item>🌐</a>
+<div class=nav_sub>
+<span class=nav_child></span>
+<a href=https://www.rkatz.xyz/ class="nav_child nav_item">English</a>
+<a href=https://www.rkatz.xyz/pt/ class="nav_child nav_item">Português</a>
+</div>
+</div>
+<div class=follow>
+<a href=https://github.com/rikatz><svg class="icon"><use xlink:href="#github"/></svg>
+</a>
+<a href=https://twitter.com/rpkatz><svg class="icon"><use xlink:href="#twitter"/></svg>
+</a>
+<a href=https://www.linkedin.com/in/katzricardo><svg class="icon"><use xlink:href="#linkedin"/></svg>
+</a>
+<a href=https://www.rkatz.xyz/index.xml><svg class="icon"><use xlink:href="#rss"/></svg>
+</a>
+<div class=color_mode>
+<input type=checkbox class=color_choice id=mode>
+</div>
+</div>
+</div>
+</nav>
+</header>
+<main>
+<div class="grid-inverse wrap content">
+<article class=post_content>
+<h1 class=post_title>NGINX NJS Experiments - Dynamic Backends</h1>
+<div class=post_meta>
+<span><svg class="icon"><use xlink:href="#calendar"/></svg></span>
+<span class=post_date>
+Sep 12, 2021</span>
+<span class=post_time> · 8 min read</span><span>&nbsp;· <a href=https://www.rkatz.xyz/tags/nginx title=NGINX class="post_tag button button_translucent">NGINX
+</a><a href=https://www.rkatz.xyz/tags/ingress title=Ingress class="post_tag button button_translucent">Ingress
+</a>
+</span>
+<span class=page_only>&nbsp;·
+<div class=post_share>
+Share on:
+<a href="https://twitter.com/intent/tweet?text=NGINX%20NJS%20Experiments%20-%20Dynamic%20Backends&url=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2021-09-13-nginx-njs-experiments%2f&tw_p=tweetbutton" class=twitter title="Share on Twitter" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#twitter"/></svg>
+</a>
+<a href="https://www.facebook.com/sharer.php?u=https%3a%2f%2fwww.rkatz.xyz%2fpost%2f2021-09-13-nginx-njs-experiments%2f&t=NGINX%20NJS%20Experiments%20-%20Dynamic%20Backends" class=facebook title="Share on Facebook" target=_blank rel=nofollow><svg class="icon"><use xlink:href="#facebook"/></svg>
+</a>
+<a href=#linkedinshare id=linkedinshare class=linkedin title="Share on LinkedIn" rel=nofollow><svg class="icon"><use xlink:href="#linkedin"/></svg>
+</a>
+<a href=https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/ title="Copy Link" class="link link_yank"><svg class="icon"><use xlink:href="#copy"/></svg>
+</a>
+</div>
+</span>
+</div>
+<h2>Overview</h2>
+<nav id=TableOfContents></nav>
+<h1 id=nginx-njs-and-the-dynamic-config>NGINX NJS and the dynamic config</h1>
+<p>Recently, due to some bugs in Ingress NGINX I have decided to look into alternatives on the dynamic upstream configuration.</p>
+<p>For those not familiar with Ingress NGINX dynamic configuration, it relies massively on Lua and <a href=https://github.com/openresty/lua-nginx-module>Openresty components</a> to allow the reconfiguration of backends without restarting NGINX process, for example.</p>
+<p>More and more features have been added to the Lua/openresty side of Ingress due to how &ldquo;easy&rdquo; it is to implement, for example different load balancing alghorithms, canary balancing and even global rate limit. I&rsquo;m pretty null at Lua coding, but other Ingress NGINX maintainers have been doing that pretty well!</p>
+<p>So, I decided to look to alternatives. Not because Openresty and Lua are bad technologies. Opposite to that, those are pretty mature and stable technologies, and widely used in cool things like Kong API Gateway (<a href=https://konghq.com/kong/),>https://konghq.com/kong/),</a> Curiefense WAF (<a href=https://www.curiefense.io/>https://www.curiefense.io/</a>) and also as Envoy and HAProxy filters.</p>
+<p>The reason I decided to do that is a simple question I did to myself: &ldquo;can we do better? Can we improve this somehow? What can I learn from this?&rdquo;</p>
+<p>For this article, I will reproduce the most used Lua part of Ingress NGINX: dynamic upstreams. Not as complete as the real one, or with all features, but just for fun.</p>
+<p>I will put all of the experiments here in [github.com/rikatz/njs-experiments]</p>
+<h1 id=nginx-njs-scripting-language>NGINX NJS scripting language</h1>
+<p>Back to 2015 (I guess…) NGINX Inc announced a new feature in NGINX, called ngiScript, which turned later into NJS. NJS allows one to write the behavior of NGINX based on Javascript language.</p>
+<p>It&rsquo;s not as wide as the whole Javascript language but still allows one to do some cool things. There are some few examples <a href=https://nginx.org/en/docs/njs/examples.html>here</a> and <a href=https://github.com/xeioex/njs-examples>here</a> like creating some JWT signing or even an S3 Gateway&rsquo;ish. You may find more examples in <a href=https://www.nginx.com/blog/tag/nginx-javascript-module/>https://www.nginx.com/blog/tag/nginx-javascript-module/</a> and also googling around there about people using NJS as an antispam bot, etc.</p>
+<p>Overall, you need to think on NJS by some perspectives:</p>
+<ul>
+<li>It is NOT as complete as Lua. You can vendor some external <a href=https://nginx.org/en/docs/njs/node_modules.html>nodejs modules</a> but do you really wanna download half the internet to process something? (npm joke here&mldr;sorry…)</li>
+<li>For ever request that your server needs to deal with, it creates a small thread to run your javascript. It is pretty fast, but still you may end adding some latency in the processing of your requests. I haven&rsquo;t tested it (yet!) to see the performance differences between Lua x NJS.</li>
+<li>NJS is a core module from NGINX. While to make Lua work you need some Openresty external stuff, LuaJIT and other things that can go wrong, NJS is part of Nginx code. It&rsquo;s not installed as default, but you can simple download it from official NGINX package repo (or compile), and its version relates to the version you are using in NGINX (while with Openresty you are sort of stuck with previous versions, like v1.19, although we use it with NGINX v1.20 in Ingress NGINX).</li>
+</ul>
+<p>See more here: [https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/]</p>
+<h1 id=starting-simple>Starting simple</h1>
+<p>So my first experiment: <strong>The hello world</strong> example.</p>
+<p>Because I&rsquo;m too lazy to install a new machine and do all the required things, I&rsquo;ve just used the &ldquo;nginx:stable&rdquo; docker image that have everything built in.</p>
+<p>So, imagine that this is my current filesystem:</p>
+<ul>
+<li>etc/nginx.conf -> Where nginx conf lives</li>
+<li>njs/ -> Where my njs scripts live</li>
+</ul>
+<p>My first approach is:</p>
+<ul>
+<li>etc/nginx.conf</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln> 1</span>load_module modules/ngx_http_js_module.so;
+<span class=ln> 2</span>events {}
+<span class=ln> 3</span>http {
+<span class=ln> 4</span>    js_import /etc/nginx/njs/http.js;
+<span class=ln> 5</span>    server {
+<span class=ln> 6</span>      listen 80;
+<span class=ln> 7</span>      location / {
+<span class=ln> 8</span>        js_content http.hello;
+<span class=ln> 9</span>      }
+<span class=ln>10</span>    }
+<span class=ln>11</span>}
+</code></pre></div><ul>
+<li>njs/http.js</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-javascript data-lang=javascript><span class=ln>1</span><span class=kd>function</span> <span class=nx>hello</span><span class=p>(</span><span class=nx>r</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln>2</span>    <span class=nx>r</span><span class=p>.</span><span class=nx>error</span><span class=p>(</span><span class=nx>JSON</span><span class=p>.</span><span class=nx>stringify</span><span class=p>(</span><span class=nx>r</span><span class=p>));</span>
+<span class=ln>3</span>    <span class=nx>r</span><span class=p>.</span><span class=k>return</span><span class=p>(</span><span class=mi>200</span><span class=p>,</span> <span class=s2>&#34;Hello world!&#34;</span><span class=p>);</span>
+<span class=ln>4</span><span class=p>}</span>
+<span class=ln>5</span><span class=kr>export</span> <span class=k>default</span> <span class=p>{</span><span class=nx>hello</span><span class=p>};</span>
+</code></pre></div><p>Not getting too deep into Javascript, but basically this:</p>
+<ul>
+<li>Will import the njs/http.js as a module</li>
+<li>Call the function http.hello every time someone calls our server on port 80 and location /</li>
+<li>Will log as an error (just for sake of debugging) the content of our request in servers log</li>
+<li>Will return a <code>200-OK Hello world</code> to our browser</li>
+</ul>
+<p>So, running this container as:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>docker run -it -p 18080:80 -v $PWD/etc/nginx.conf:/etc/nginx/nginx.conf -v $PWD/njs/:/etc/nginx/njs/ --rm nginx:stable
+</code></pre></div><p>And calling it with <code>curl http://127.0.0.1:18080/lalala?test=xpto</code> we get a Hello world, and the following log:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>2021/09/12 23:59:16 [error] 32#32: *1 js: {&#34;status&#34;:0,&#34;args&#34;:{&#34;test&#34;:&#34;xpto&#34;},&#34;httpVersion&#34;:&#34;1.1&#34;,&#34;remoteAddress&#34;:&#34;172.17.0.1&#34;,&#34;headersOut&#34;:{},&#34;method&#34;:&#34;GET&#34;,&#34;uri&#34;:&#34;/lalala&#34;,&#34;headersIn&#34;:{&#34;Host&#34;:&#34;127.0.0.1:18080&#34;,&#34;User-Agent&#34;:&#34;curl/7.74.0&#34;,&#34;Accept&#34;:&#34;*/*&#34;}}
+</code></pre></div><p>Nice uh. So, by the log, we know that there is a bunch of stuff we can extract from our requests (see the Reference <a href=https://nginx.org/en/docs/njs/reference.html>https://nginx.org/en/docs/njs/reference.html</a>)</p>
+<h1 id=doing-some-dynamic-backend-experiments>Doing some dynamic backend experiments</h1>
+<p>So now we know that we can extract Headers and URI with Javascript, which are two important parts that can help us on the routing decision.</p>
+<p>Let&rsquo;s then write a new Javascript that returns an upstream based on the Host information:</p>
+<ul>
+<li>njs/perhost.js</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-javascript data-lang=javascript><span class=ln> 1</span><span class=kd>function</span> <span class=nx>getUpstream</span><span class=p>(</span><span class=nx>req</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 2</span>    <span class=kd>var</span> <span class=nx>host</span><span class=p>;</span>
+<span class=ln> 3</span>    <span class=nx>host</span> <span class=o>=</span> <span class=nx>req</span><span class=p>.</span><span class=nx>headersIn</span><span class=p>[</span><span class=s1>&#39;Host&#39;</span><span class=p>].</span><span class=nx>toLowerCase</span><span class=p>();</span>
+<span class=ln> 4</span>    <span class=k>if</span> <span class=p>(</span><span class=nx>host</span> <span class=o>==</span> <span class=s2>&#34;mydomain1.com&#34;</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 5</span>        <span class=k>return</span> <span class=s2>&#34;https://www.google.com&#34;</span>
+<span class=ln> 6</span>    <span class=p>}</span>
+<span class=ln> 7</span>    <span class=k>if</span> <span class=p>(</span><span class=nx>host</span> <span class=o>==</span> <span class=s2>&#34;mydomain2.com&#34;</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 8</span>        <span class=k>return</span> <span class=s2>&#34;https://www.amazon.com&#34;</span>
+<span class=ln> 9</span>    <span class=p>}</span>
+<span class=ln>10</span>    <span class=nx>req</span><span class=p>.</span><span class=k>return</span><span class=p>(</span><span class=mi>404</span><span class=p>,</span> <span class=s2>&#34;Backend not found&#34;</span><span class=p>);</span>
+<span class=ln>11</span>    <span class=nx>req</span><span class=p>.</span><span class=nx>finish</span><span class=p>();</span>
+<span class=ln>12</span>    <span class=c1>// Invalid return just so it wont complain
+</span><span class=ln>13</span><span class=c1></span>    <span class=k>return</span> <span class=s2>&#34;@invalidstuff&#34;</span>
+<span class=ln>14</span><span class=p>}</span>
+<span class=ln>15</span>
+<span class=ln>16</span><span class=kr>export</span> <span class=k>default</span> <span class=p>{</span><span class=nx>getUpstream</span><span class=p>};</span>
+</code></pre></div><ul>
+<li>etc/nginx.conf</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln> 1</span>load_module modules/ngx_http_js_module.so;
+<span class=ln> 2</span>events {}
+<span class=ln> 3</span>http {
+<span class=ln> 4</span>    resolver 8.8.8.8;
+<span class=ln> 5</span>    js_import &#34;/etc/nginx/njs/perhost.js&#34;;
+<span class=ln> 6</span>    js_set $upstream perhost.getUpstream;
+<span class=ln> 7</span>    server {
+<span class=ln> 8</span>      listen 80;
+<span class=ln> 9</span>      location / {
+<span class=ln>10</span>        proxy_pass $upstream;
+<span class=ln>11</span>      }
+<span class=ln>12</span>    }
+<span class=ln>13</span>}
+</code></pre></div><p>Doing some tests now, we can see that:</p>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>curl -H &#34;mydomain1.com&#34; http://127.0.0.1:18080 # Returns Google
+<span class=ln>2</span>curl -H &#34;mydomain2.com&#34; http://127.0.0.1:18080 # Returns Amazon
+<span class=ln>3</span>curl -H &#34;somethingweird.com&#34; http://127.0.0.1:18080 # Returns 404 Backend not found
+</code></pre></div><p>Before someone complains that I&rsquo;m not checking if Host is null, this is intentional. If you call our Nginx without the host header the user will receive a 500 as the Host field does not exists and we still try to convert it to lowercase. It&rsquo;s good to know that only that Javascript VM dies, but still in prod scripts this needs to be checked properly!</p>
+<h1 id=going-far-and-reading-the-upstreams-config-from-somewhere-else>Going far and reading the upstreams config from somewhere else</h1>
+<p>Until now we could play with NJS and have some dynamic responses based on headers. But so far, everything is still pretty &ldquo;static&rdquo;, as the decision making is hardcoded into our Javascript.</p>
+<p>But how to do something near to the real world, with dynamic reconfigurations? In case of Ingress NGINX, Lua script is a long running program that listens on a specific port and gets configuration updates from Ingress Controller, adding the endpoints into a local map.</p>
+<p>In NJS, as each script runs and dies per request it does not seem possible to store a cache/map to be used with endpoints, so what&rsquo;s the easiest way? Files containing endpoints :)</p>
+<p>I will not dive here into performance implications, but only on the viability of this. For this solution we want to follow the current approach of Ingress NGINX:</p>
+<ul>
+<li>&ldquo;set&rdquo; a variable called &ldquo;proxy_upstream_name&rdquo; containing a &ldquo;namespace-servicename-port&rdquo;</li>
+<li>have a file in a directory called &ldquo;upstreams/namespace-servicename-port&rdquo; containing one upstream per line</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>www.google.com:80
+<span class=ln>2</span>www.amazon.com:443
+<span class=ln>3</span>192.168.0.10:9999
+</code></pre></div><ul>
+<li>For each request, we get the variable name from the request, open the correct file (if it exists), select one random upstream.</li>
+</ul>
+<p>Obs.: Ingress NGINX nowadays reloads the config if backend protocol or locations are changed. We won&rsquo;t mess with this in this article, but this might be an improvement when using NJS: We can put all of the other configurations as dynamic files, and simply read from them.</p>
+<p>So here is the implementation:</p>
+<ul>
+<li>etc/nginx.conf
+etc/nginx.conf</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln> 1</span>load_module modules/ngx_http_js_module.so;
+<span class=ln> 2</span>events {}
+<span class=ln> 3</span>http {
+<span class=ln> 4</span>    resolver 8.8.8.8;
+<span class=ln> 5</span>    js_import /etc/nginx/njs/ingress.js;
+<span class=ln> 6</span>    js_set $upstream ingress.getUpstream;
+<span class=ln> 7</span>    server {
+<span class=ln> 8</span>      listen 80;
+<span class=ln> 9</span>      location / {
+<span class=ln>10</span>        set $ingress_service &#34;default-nginx1-80&#34;;
+<span class=ln>11</span>        proxy_pass http://$upstream;
+<span class=ln>12</span>      }
+<span class=ln>13</span>      location /otherlocation {
+<span class=ln>14</span>        set $ingress_service &#34;rkatz-nginx2-80&#34;;
+<span class=ln>15</span>        proxy_pass http://$upstream;
+<span class=ln>16</span>      }
+<span class=ln>17</span>      location /otherlocation1 {
+<span class=ln>18</span>        proxy_pass http://$upstream;
+<span class=ln>19</span>      }
+<span class=ln>20</span>    }
+<span class=ln>21</span>}
+</code></pre></div><ul>
+<li>njs/ingress.js</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-javascript data-lang=javascript><span class=ln> 1</span><span class=kd>function</span> <span class=nx>getUpstream</span><span class=p>(</span><span class=nx>req</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 2</span>    <span class=kd>var</span> <span class=nx>fs</span> <span class=o>=</span> <span class=nx>require</span><span class=p>(</span><span class=s1>&#39;fs&#39;</span><span class=p>)</span>
+<span class=ln> 3</span>    <span class=kd>var</span> <span class=nx>upstreamfile</span><span class=p>;</span>
+<span class=ln> 4</span>    <span class=kd>var</span> <span class=nx>upstream</span><span class=p>;</span>
+<span class=ln> 5</span>    <span class=kd>var</span> <span class=nx>service</span><span class=p>;</span>
+<span class=ln> 6</span>    <span class=k>if</span> <span class=p>(</span><span class=s2>&#34;variables&#34;</span> <span class=k>in</span> <span class=nx>req</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 7</span>      <span class=nx>service</span> <span class=o>=</span> <span class=nx>req</span><span class=p>.</span><span class=nx>variables</span><span class=p>.</span><span class=nx>ingress_service</span><span class=p>;</span>
+<span class=ln> 8</span>      <span class=k>if</span> <span class=p>(</span><span class=nx>service</span> <span class=o>==</span> <span class=s2>&#34;&#34;</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln> 9</span>        <span class=k>return</span> <span class=nx>invalidBackend</span><span class=p>(</span><span class=nx>req</span><span class=p>,</span> <span class=mi>404</span><span class=p>);</span>
+<span class=ln>10</span>      <span class=p>}</span>
+<span class=ln>11</span>    <span class=p>}</span>
+<span class=ln>12</span>
+<span class=ln>13</span>    <span class=nx>upstreamfile</span> <span class=o>=</span> <span class=s2>&#34;/etc/nginx/upstreams/&#34;</span> <span class=o>+</span> <span class=nx>service</span><span class=p>;</span>
+<span class=ln>14</span>    <span class=k>try</span> <span class=p>{</span>
+<span class=ln>15</span>        <span class=nx>upstream</span> <span class=o>=</span> <span class=nx>fs</span><span class=p>.</span><span class=nx>readFileSync</span><span class=p>(</span><span class=nx>upstreamfile</span><span class=p>,</span> <span class=s1>&#39;utf8&#39;</span><span class=p>);</span>
+<span class=ln>16</span>        <span class=kd>var</span> <span class=nx>endpointArr</span> <span class=o>=</span> <span class=nx>upstream</span><span class=p>.</span><span class=nx>split</span><span class=p>(</span><span class=s2>&#34;\n&#34;</span><span class=p>);</span>
+<span class=ln>17</span>        <span class=k>if</span> <span class=p>(</span><span class=nx>endpointArr</span><span class=p>.</span><span class=nx>length</span> <span class=o>==</span> <span class=mi>1</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln>18</span>            <span class=k>if</span> <span class=p>(</span><span class=nx>endpointArr</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=o>!=</span> <span class=s2>&#34;&#34;</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln>19</span>                <span class=k>return</span> <span class=nx>endpointArr</span><span class=p>[</span><span class=mi>0</span><span class=p>].</span><span class=nx>replace</span><span class=p>(</span><span class=sr>/^\s+|\s+$/g</span><span class=p>,</span> <span class=s1>&#39;&#39;</span><span class=p>);</span>
+<span class=ln>20</span>                <span class=p>}</span>
+<span class=ln>21</span>            <span class=k>return</span> <span class=nx>invalidBackend</span><span class=p>(</span><span class=nx>req</span><span class=p>,</span> <span class=mi>404</span><span class=p>);</span>
+<span class=ln>22</span>            <span class=p>}</span>
+<span class=ln>23</span>        <span class=kd>var</span> <span class=nx>randomBackend</span> <span class=o>=</span> <span class=nb>Math</span><span class=p>.</span><span class=nx>floor</span><span class=p>(</span><span class=nb>Math</span><span class=p>.</span><span class=nx>random</span><span class=p>()</span> <span class=o>*</span> <span class=p>(</span><span class=nx>endpointArr</span><span class=p>.</span><span class=nx>length</span> <span class=o>-</span> <span class=mi>1</span><span class=p>));</span>
+<span class=ln>24</span>        <span class=c1>// The final replace is to remove some dirty line break
+</span><span class=ln>25</span><span class=c1></span>        <span class=k>return</span> <span class=nx>endpointArr</span><span class=p>[</span><span class=nx>randomBackend</span><span class=p>].</span><span class=nx>replace</span><span class=p>(</span><span class=sr>/^\s+|\s+$/g</span><span class=p>,</span> <span class=s1>&#39;&#39;</span><span class=p>);</span>
+<span class=ln>26</span>
+<span class=ln>27</span>    <span class=p>}</span> <span class=k>catch</span> <span class=p>(</span><span class=nx>e</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln>28</span>        <span class=nx>req</span><span class=p>.</span><span class=nx>error</span><span class=p>(</span><span class=nx>e</span><span class=p>)</span>
+<span class=ln>29</span>        <span class=k>return</span> <span class=nx>invalidBackend</span><span class=p>(</span><span class=nx>req</span><span class=p>,</span> <span class=mi>502</span><span class=p>);</span>
+<span class=ln>30</span>        <span class=p>}</span>
+<span class=ln>31</span>    <span class=k>return</span> <span class=nx>invalidBackend</span><span class=p>(</span><span class=nx>req</span><span class=p>,</span> <span class=mi>503</span><span class=p>);</span>
+<span class=ln>32</span><span class=p>}</span>
+<span class=ln>33</span>
+<span class=ln>34</span><span class=kd>function</span> <span class=nx>invalidBackend</span><span class=p>(</span><span class=nx>req</span><span class=p>,</span> <span class=nx>code</span><span class=p>)</span> <span class=p>{</span>
+<span class=ln>35</span>    <span class=nx>req</span><span class=p>.</span><span class=k>return</span><span class=p>(</span><span class=nx>code</span><span class=p>,</span> <span class=s2>&#34;Invalid Backend&#34;</span><span class=p>);</span>
+<span class=ln>36</span>    <span class=nx>req</span><span class=p>.</span><span class=nx>finish</span><span class=p>();</span>
+<span class=ln>37</span>    <span class=k>return</span> <span class=s2>&#34;@invalidbackend&#34;</span>
+<span class=ln>38</span><span class=p>}</span>
+<span class=ln>39</span>
+<span class=ln>40</span><span class=kr>export</span> <span class=k>default</span> <span class=p>{</span><span class=nx>getUpstream</span><span class=p>};</span>
+</code></pre></div><p>This is getting more complex, but pretty easy to read: &ldquo;we will use the variable <code>ingress_service</code> that is set in nginx.conf, to discover what file should be read. So, if <code>ingress_service=rkatz-myapp-80</code> a file with this name must exist in <code>/etc/nginx/upstreams</code>.</p>
+<p>And here are the upstream data:</p>
+<ul>
+<li>rkatz-nginx2-80</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>www.google.com
+<span class=ln>2</span>www.amazon.com
+<span class=ln>3</span>www.uol.com.br
+<span class=ln>4</span>192.168.0.10
+</code></pre></div><ul>
+<li>default-nginx1-80</li>
+</ul>
+<div class=highlight><pre tabindex=0 class=chroma><code class=language-fallback data-lang=fallback><span class=ln>1</span>www.rkatz.xyz
+</code></pre></div><p>Now calling myserver:80/ will proxy to <a href=http://www.rkatz.xyz>www.rkatz.xyz</a>, while calling myserver:80/otherlocation will randomize calls between the endpoints in file <code>rkatz-nginx2-80</code>.</p>
+<p>If I call myserver:80/otherlocation1, I will end up with an error of <code>Invalid backend</code> as no <code>ingress_service</code> variable is being set for that location.</p>
+<h1 id=some-conclusions>Some conclusions</h1>
+<p>NJS have a lot of potential to offload some dynamic reconfiguration needs in Ingress NGINX and other services.</p>
+<p>While it still have some concerns about the community, the features are pretty nice and easy to develop, using common javascript and can also be used to implement some &ldquo;FaaS&rdquo; on the edge, for example.</p>
+</article>
+<aside class=sidebar>
+<section class=sidebar_inner>
+<h2>Ricardo P. Katz</h2>
+<div class=author_bio>
+SRE, does Kubernetes Stuff around there. Lego and planes addicted
+</div>
+<a href=https://www.rkatz.xyz/about/ class="button mt-1" role=button title="Read More">Read More</a>
+<h2 class=mt-4>Featured Posts</h2>
+<ul>
+<li>
+<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ class=nav-link title="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP">The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a>
+</li>
+</ul>
+<h2 class=mt-4>Recent Posts</h2>
+<ul class=flex-column>
+<li>
+<a href=https://www.rkatz.xyz/post/2021-04-16-falco-network-monitoring/ class=nav-link title="Using Falco to monitor outbound traffic for Pods in Kubernetes">Using Falco to monitor outbound traffic for Pods in Kubernetes</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-12-30-k8s-control-plane-fbsd-k3s/ class=nav-link title="Kubernetes Control Plane natively on FreeBSD with K3s">Kubernetes Control Plane natively on FreeBSD with K3s</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-11-01-the-mix-of-packet-filter-ebpf-xdp/ class=nav-link title="The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP">The mix (and mess) of Packet Filter in Linux Part 2 - eBPF + XDP</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-the-mix-of-packet-filter-linux-part1/ class=nav-link title="The mix (and mess) of Packet Filter Linux - Part 1">The mix (and mess) of Packet Filter Linux - Part 1</a>
+</li>
+<li>
+<a href=https://www.rkatz.xyz/post/2020-09-13-flatcar/ class=nav-link title="Flatcar Linux in VMware Player — 5 minute command line deploy">Flatcar Linux in VMware Player — 5 minute command line deploy</a>
+</li>
+</ul>
+<div>
+<h2 class="mt-4 taxonomy" id=categories-section>Categories</h2>
+<nav class=tags_nav>
+<a href=https://www.rkatz.xyz/categories/technology/ class="post_tag button button_translucent" title=technology>
+TECHNOLOGY
+<span class=button_tally>6</span>
+</a>
+</nav>
+</div>
+<div>
+<h2 class="mt-4 taxonomy" id=tags-section>Tags</h2>
+<nav class=tags_nav>
+<a href=https://www.rkatz.xyz/tags/kubernetes/ class="post_tag button button_translucent" title=kubernetes>
+KUBERNETES
+<span class=button_tally>3</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/ebpf/ class="post_tag button button_translucent" title=ebpf>
+EBPF
+<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/packet-filtering/ class="post_tag button button_translucent" title=packet-filtering>
+PACKET-FILTERING
+<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/automation/ class="post_tag button button_translucent" title=automation>
+AUTOMATION
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/falco/ class="post_tag button button_translucent" title=falco>
+FALCO
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/flatcar/ class="post_tag button button_translucent" title=flatcar>
+FLATCAR
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/freebsd/ class="post_tag button button_translucent" title=freebsd>
+FREEBSD
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/ingress/ class="post_tag button button_translucent" title=ingress>
+INGRESS
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/iptables/ class="post_tag button button_translucent" title=iptables>
+IPTABLES
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/k3s/ class="post_tag button button_translucent" title=k3s>
+K3S
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/netfilter/ class="post_tag button button_translucent" title=netfilter>
+NETFILTER
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/nginx/ class="post_tag button button_translucent" title=nginx>
+NGINX
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/observability/ class="post_tag button button_translucent" title=observability>
+OBSERVABILITY
+<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/security/ class="post_tag button button_translucent" title=security>
+SECURITY
+<span class=button_tally>1</span>
+</a>
+<br>
+<div class="post_tags_toggle button">All Tags</div>
+<div class=post_tags>
+<div class=tags_list>
+<a href=https://www.rkatz.xyz/tags/automation/ class="post_tag button button_translucent" data-position=1 title=automation>AUTOMATION<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/ebpf/ class="post_tag button button_translucent" data-position=2 title=ebpf>EBPF<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/falco/ class="post_tag button button_translucent" data-position=1 title=falco>FALCO<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/flatcar/ class="post_tag button button_translucent" data-position=1 title=flatcar>FLATCAR<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/freebsd/ class="post_tag button button_translucent" data-position=1 title=freebsd>FREEBSD<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/ingress/ class="post_tag button button_translucent" data-position=1 title=ingress>INGRESS<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/iptables/ class="post_tag button button_translucent" data-position=1 title=iptables>IPTABLES<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/k3s/ class="post_tag button button_translucent" data-position=1 title=k3s>K3S<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/kubernetes/ class="post_tag button button_translucent" data-position=3 title=kubernetes>KUBERNETES<span class=button_tally>3</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/netfilter/ class="post_tag button button_translucent" data-position=1 title=netfilter>NETFILTER<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/nginx/ class="post_tag button button_translucent" data-position=1 title=nginx>NGINX<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/observability/ class="post_tag button button_translucent" data-position=1 title=observability>OBSERVABILITY<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/packet-filtering/ class="post_tag button button_translucent" data-position=2 title=packet-filtering>PACKET-FILTERING<span class=button_tally>2</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/security/ class="post_tag button button_translucent" data-position=1 title=security>SECURITY<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/vmware/ class="post_tag button button_translucent" data-position=1 title=vmware>VMWARE<span class=button_tally>1</span>
+</a>
+<a href=https://www.rkatz.xyz/tags/xdp/ class="post_tag button button_translucent" data-position=1 title=xdp>XDP<span class=button_tally>1</span>
+</a>
+<div class=tags_sort><span title="sort alphabetically">[A~Z]</span><span title="sort by count">[0~9]</span>
+</div>
+<span class=tags_hide><svg class="icon"><use xlink:href="#closeme"/></svg></span>
+</div>
+</div>
+</nav>
+</div>
+</section>
+</aside>
+</div>
+</main><svg width="0" height="0" class="hidden"><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="facebook"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h151V331h-60v-90h60v-61c0-49.629 40.371-90 90-90h91v90h-91v61h91l-15 90h-76v181h121c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18.001 18.001" id="twitter"><path d="M15.891 4.013c.808-.496 1.343-1.173 1.605-2.034a8.68 8.68.0 01-2.351.861c-.703-.756-1.593-1.14-2.66-1.14-1.043.0-1.924.366-2.643 1.078A3.56 3.56.0 008.766 5.383c0 .309.039.585.117.819-3.076-.105-5.622-1.381-7.628-3.837-.34.601-.51 1.213-.51 1.846.0 1.301.549 2.332 1.645 3.089-.625-.053-1.176-.211-1.645-.47.0.929.273 1.705.82 2.388a3.623 3.623.0 002.115 1.291c-.312.08-.641.118-.979.118-.312.0-.533-.026-.664-.083.23.757.664 1.371 1.291 1.841a3.652 3.652.0 002.152.743C4.148 14.173 2.625 14.69.902 14.69c-.422.0-.721-.006-.902-.038 1.697 1.102 3.586 1.649 5.676 1.649 2.139.0 4.029-.542 5.674-1.626 1.645-1.078 2.859-2.408 3.639-3.974a10.77 10.77.0 001.172-4.892v-.468a7.788 7.788.0 001.84-1.921 8.142 8.142.0 01-2.11.593z"/></symbol><symbol aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="mail"><path d="M502.3 190.8c3.9-3.1 9.7-.2 9.7 4.7V4e2c0 26.5-21.5 48-48 48H48c-26.5.0-48-21.5-48-48V195.6c0-5 5.7-7.8 9.7-4.7 22.4 17.4 52.1 39.5 154.1 113.6 21.1 15.4 56.7 47.8 92.2 47.6 35.7.3 72-32.8 92.3-47.6 102-74.1 131.6-96.3 154-113.7zM256 320c23.2.4 56.6-29.2 73.4-41.4 132.7-96.3 142.8-104.7 173.4-128.7 5.8-4.5 9.2-11.5 9.2-18.9v-19c0-26.5-21.5-48-48-48H48C21.5 64 0 85.5.0 112v19c0 7.4 3.4 14.3 9.2 18.9 30.6 23.9 40.7 32.4 173.4 128.7 16.8 12.2 50.2 41.8 73.4 41.4z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="calendar"><path d="M452 40h-24V0h-40v40H124V0H84v40H60C26.916 40 0 66.916.0 1e2v352c0 33.084 26.916 60 60 60h392c33.084.0 60-26.916 60-60V1e2c0-33.084-26.916-60-60-60zm20 412c0 11.028-8.972 20-20 20H60c-11.028.0-20-8.972-20-20V188h432v264zm0-304H40v-48c0-11.028 8.972-20 20-20h24v40h40V80h264v40h40V80h24c11.028.0 20 8.972 20 20v48z"/><path d="M76 230h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 310h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zM76 390h40v40H76zm80 0h40v40h-40zm80 0h40v40h-40zm80 0h40v40h-40zm80-80h40v40h-40z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="github"><path d="M255.968 5.329C114.624 5.329.0 120.401.0 262.353c0 113.536 73.344 209.856 175.104 243.872 12.8 2.368 17.472-5.568 17.472-12.384.0-6.112-.224-22.272-.352-43.712-71.2 15.52-86.24-34.464-86.24-34.464-11.616-29.696-28.416-37.6-28.416-37.6-23.264-15.936 1.728-15.616 1.728-15.616 25.696 1.824 39.2 26.496 39.2 26.496 22.848 39.264 59.936 27.936 74.528 21.344 2.304-16.608 8.928-27.936 16.256-34.368-56.832-6.496-116.608-28.544-116.608-127.008.0-28.064 9.984-51.008 26.368-68.992-2.656-6.496-11.424-32.64 2.496-68 0 0 21.504-6.912 70.4 26.336 20.416-5.696 42.304-8.544 64.096-8.64 21.728.128 43.648 2.944 64.096 8.672 48.864-33.248 70.336-26.336 70.336-26.336 13.952 35.392 5.184 61.504 2.56 68 16.416 17.984 26.304 40.928 26.304 68.992.0 98.72-59.84 120.448-116.864 126.816 9.184 7.936 17.376 23.616 17.376 47.584.0 34.368-.32 62.08-.32 70.496.0 6.88 4.608 14.88 17.6 12.352C438.72 472.145 512 375.857 512 262.353 512 120.401 397.376 5.329 255.968 5.329z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 212" id="gitlab"><path d="M12.3 74.7h54L43.3 3c-1-3.6-6.4-3.6-7.6.0L12.3 74.8z"/><path d="M12.3 74.7.5 111c-1 3.2.0 6.8 3 8.8l101.6 74-92.5-119z"/><path d="M105 193.7l-38.6-119h-54l92.7 119z"/><path d="M105 193.7l38.7-119H66.4l38.7 119z"/><path d="M105 193.7l38.7-119H198l-93 119z"/><path d="M198 74.7l11.6 36.2c1 3 0 6.6-3 8.6l-101.5 74 93-119z"/><path d="M198 74.7h-54.3L167 3c1.2-3.6 6.4-3.6 7.6.0L198 74.8z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="rss"><circle cx="3.429" cy="20.571" r="3.429"/><path d="M11.429 24h4.57C15.999 15.179 8.821 8.001.0 8v4.572c6.302.001 11.429 5.126 11.429 11.428z"/><path d="M24 24C24 10.766 13.234.0.0.0v4.571c10.714.0 19.43 8.714 19.43 19.429z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="linkedin"><path d="M437 0H75C33.648.0.0 33.648.0 75v362c0 41.352 33.648 75 75 75h362c41.352.0 75-33.648 75-75V75c0-41.352-33.648-75-75-75zM181 406h-60V196h60zm0-240h-60v-60h60zm210 240h-60V286c0-16.54-13.46-30-30-30s-30 13.46-30 30v120h-60V196h60v11.309C286.719 202.422 296.93 196 316 196c40.691.043 75 36.547 75 79.688zm0 0"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 612 612" id="arrow"><path d="M604.501 440.509 325.398 134.956c-5.331-5.357-12.423-7.627-19.386-7.27-6.989-.357-14.056 1.913-19.387 7.27L7.499 440.509c-9.999 10.024-9.999 26.298.0 36.323s26.223 10.024 36.222.0l262.293-287.164L568.28 476.832c9.999 10.024 26.222 10.024 36.221.0 9.999-10.023 9.999-26.298.0-36.323z"/></symbol><symbol viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" id="carly"><path d="M504.971 239.029 448 182.059V84c0-46.317-37.682-84-84-84h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c19.851.0 36 16.149 36 36v108c0 6.365 2.529 12.47 7.029 16.971L454.059 256l-47.029 47.029A24.002 24.002.0 004e2 320v108c0 19.851-16.149 36-36 36h-44c-13.255.0-24 10.745-24 24s10.745 24 24 24h44c46.318.0 84-37.683 84-84v-98.059l56.971-56.971c9.372-9.372 9.372-24.568.0-33.941zM112 192V84c0-19.851 16.149-36 36-36h44c13.255.0 24-10.745 24-24S205.255.0 192 0h-44c-46.318.0-84 37.683-84 84v98.059l-56.971 56.97c-9.373 9.373-9.373 24.568.0 33.941L64 329.941V428c0 46.317 37.682 84 84 84h44c13.255.0 24-10.745 24-24s-10.745-24-24-24h-44c-19.851.0-36-16.149-36-36V320c0-6.365-2.529-12.47-7.029-16.971L57.941 256l47.029-47.029A24.002 24.002.0 00112 192z"/></symbol><symbol viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" id="copy"><path d="M23 2.75A2.75 2.75.0 0020.25.0H8.75A2.75 2.75.0 006 2.75v13.5A2.75 2.75.0 008.75 19h11.5A2.75 2.75.0 0023 16.25zM18.25 14.5h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5zm0-3h-7.5a.75.75.0 010-1.5h7.5a.75.75.0 010 1.5z"/><path d="M8.75 20.5A4.255 4.255.0 014.5 16.25V2.75c0-.086.02-.166.025-.25H3.75A2.752 2.752.0 001 5.25v16A2.752 2.752.0 003.75 24h12a2.752 2.752.0 002.75-2.75v-.75z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512.001 512.001" id="closeme"><path d="M284.286 256.002 506.143 34.144c7.811-7.811 7.811-20.475.0-28.285-7.811-7.81-20.475-7.811-28.285.0L256 227.717 34.143 5.859c-7.811-7.811-20.475-7.811-28.285.0-7.81 7.811-7.811 20.475.0 28.285l221.857 221.857L5.858 477.859c-7.811 7.811-7.811 20.475.0 28.285a19.938 19.938.0 0014.143 5.857 19.94 19.94.0 0014.143-5.857L256 284.287l221.857 221.857c3.905 3.905 9.024 5.857 14.143 5.857s10.237-1.952 14.143-5.857c7.811-7.811 7.811-20.475.0-28.285L284.286 256.002z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="open-menu"><path d="M492 236H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0-160H20C8.954 76 0 84.954.0 96s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20zm0 320H20c-11.046.0-20 8.954-20 20s8.954 20 20 20h472c11.046.0 20-8.954 20-20s-8.954-20-20-20z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="instagram"><path d="M12 2.163c3.204.0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849.0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204.0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849.0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741.0 8.333.014 7.053.072c-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948s.014 3.668.072 4.948c.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24s3.668-.014 4.948-.072c4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948s-.014-3.667-.072-4.947c-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403.0-6.162 2.759-6.162 6.162S8.597 18.163 12 18.163s6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zM12 16c-2.209.0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796.0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795.0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="youtube"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23.0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23.0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 3.993L9 16z"/></symbol><symbol xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="stackoverflow"><path d="M21 27v-8h3v11H0V19h3v8h18z"/><path d="M17.1.2 15 1.8l7.9 10.6 2.1-1.6L17.1.2zm3.7 14.7L10.6 6.4l1.7-2 10.2 8.5-1.7 2zM7.2 12.3l12 5.6 1.1-2.4-12-5.6-1.1 2.4zm-1.8 6.8 13.56 1.96.17-2.38-13.26-2.55-.47 2.97zM19 25H5v-3h14v3z"/></symbol></svg>
+<footer class=footer>
+</footer>
+<script type=text/javascript src=https://www.rkatz.xyz/js/bundle.min.14825dc619648aeca2e4e66c65ef7d06ea216e6a64cd503f64d2fe77950ee425c47fc0f2cf993c2d656f534914619a2c47c8313438a810ed5008db38a46a812d.js integrity="sha512-FIJdxhlkiuyi5OZsZe99BuohbmpkzVA/ZNL+d5UO5CXEf8Dyz5k8LWVvU0kUYZosR8gxNDioEO1QCNs4pGqBLQ==" crossorigin=anonymous></script>
+</body>
+</html>

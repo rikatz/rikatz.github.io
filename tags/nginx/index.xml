@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>NGINX on The Katz Experiments</title><link>https://www.rkatz.xyz/tags/nginx/</link><description>Recent content in NGINX on The Katz Experiments</description><generator>Hugo -- gohugo.io</generator><lastBuildDate>Sun, 12 Sep 2021 23:00:00 -0300</lastBuildDate><atom:link href="https://www.rkatz.xyz/tags/nginx/index.xml" rel="self" type="application/rss+xml"/><item><title>NGINX NJS Experiments - Dynamic Backends</title><link>https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/</link><pubDate>Sun, 12 Sep 2021 23:00:00 -0300</pubDate><guid>https://www.rkatz.xyz/post/2021-09-13-nginx-njs-experiments/</guid><description>
+&lt;h1 id="nginx-njs-and-the-dynamic-config">NGINX NJS and the dynamic config&lt;/h1>
+&lt;p>Recently, due to some bugs in Ingress NGINX I have decided to look into alternatives on the dynamic upstream configuration.&lt;/p>
+&lt;p>For those not familiar with Ingress NGINX dynamic configuration, it relies massively on Lua and &lt;a href="https://github.com/openresty/lua-nginx-module">Openresty components&lt;/a> to allow the reconfiguration of backends without restarting NGINX process, for example.&lt;/p>
+&lt;p>More and more features have been added to the Lua/openresty side of Ingress due to how &amp;ldquo;easy&amp;rdquo; it is to implement, for example different load balancing alghorithms, canary balancing and even global rate limit. I&amp;rsquo;m pretty null at Lua coding, but other Ingress NGINX maintainers have been doing that pretty well!&lt;/p>
+&lt;p>So, I decided to look to alternatives. Not because Openresty and Lua are bad technologies. Opposite to that, those are pretty mature and stable technologies, and widely used in cool things like Kong API Gateway (&lt;a href="https://konghq.com/kong/),">https://konghq.com/kong/),&lt;/a> Curiefense WAF (&lt;a href="https://www.curiefense.io/">https://www.curiefense.io/&lt;/a>) and also as Envoy and HAProxy filters.&lt;/p>
+&lt;p>The reason I decided to do that is a simple question I did to myself: &amp;ldquo;can we do better? Can we improve this somehow? What can I learn from this?&amp;rdquo;&lt;/p>
+&lt;p>For this article, I will reproduce the most used Lua part of Ingress NGINX: dynamic upstreams. Not as complete as the real one, or with all features, but just for fun.&lt;/p>
+&lt;p>I will put all of the experiments here in [github.com/rikatz/njs-experiments]&lt;/p>
+&lt;h1 id="nginx-njs-scripting-language">NGINX NJS scripting language&lt;/h1>
+&lt;p>Back to 2015 (I guess…) NGINX Inc announced a new feature in NGINX, called ngiScript, which turned later into NJS. NJS allows one to write the behavior of NGINX based on Javascript language.&lt;/p>
+&lt;p>It&amp;rsquo;s not as wide as the whole Javascript language but still allows one to do some cool things. There are some few examples &lt;a href="https://nginx.org/en/docs/njs/examples.html">here&lt;/a> and &lt;a href="https://github.com/xeioex/njs-examples">here&lt;/a> like creating some JWT signing or even an S3 Gateway&amp;rsquo;ish. You may find more examples in &lt;a href="https://www.nginx.com/blog/tag/nginx-javascript-module/">https://www.nginx.com/blog/tag/nginx-javascript-module/&lt;/a> and also googling around there about people using NJS as an antispam bot, etc.&lt;/p>
+&lt;p>Overall, you need to think on NJS by some perspectives:&lt;/p>
+&lt;ul>
+&lt;li>It is NOT as complete as Lua. You can vendor some external &lt;a href="https://nginx.org/en/docs/njs/node_modules.html">nodejs modules&lt;/a> but do you really wanna download half the internet to process something? (npm joke here&amp;hellip;sorry…)&lt;/li>
+&lt;li>For ever request that your server needs to deal with, it creates a small thread to run your javascript. It is pretty fast, but still you may end adding some latency in the processing of your requests. I haven&amp;rsquo;t tested it (yet!) to see the performance differences between Lua x NJS.&lt;/li>
+&lt;li>NJS is a core module from NGINX. While to make Lua work you need some Openresty external stuff, LuaJIT and other things that can go wrong, NJS is part of Nginx code. It&amp;rsquo;s not installed as default, but you can simple download it from official NGINX package repo (or compile), and its version relates to the version you are using in NGINX (while with Openresty you are sort of stuck with previous versions, like v1.19, although we use it with NGINX v1.20 in Ingress NGINX).&lt;/li>
+&lt;/ul>
+&lt;p>See more here: [https://www.nginx.com/blog/harnessing-power-convenience-of-javascript-for-each-request-with-nginx-javascript-module/]&lt;/p>
+&lt;h1 id="starting-simple">Starting simple&lt;/h1>
+&lt;p>So my first experiment: &lt;strong>The hello world&lt;/strong> example.&lt;/p>
+&lt;p>Because I&amp;rsquo;m too lazy to install a new machine and do all the required things, I&amp;rsquo;ve just used the &amp;ldquo;nginx:stable&amp;rdquo; docker image that have everything built in.&lt;/p>
+&lt;p>So, imagine that this is my current filesystem:&lt;/p>
+&lt;ul>
+&lt;li>etc/nginx.conf -&amp;gt; Where nginx conf lives&lt;/li>
+&lt;li>njs/ -&amp;gt; Where my njs scripts live&lt;/li>
+&lt;/ul>
+&lt;p>My first approach is:&lt;/p>
+&lt;ul>
+&lt;li>etc/nginx.conf&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln"> 1&lt;/span>load_module modules/ngx_http_js_module.so;
+&lt;span class="ln"> 2&lt;/span>events {}
+&lt;span class="ln"> 3&lt;/span>http {
+&lt;span class="ln"> 4&lt;/span> js_import /etc/nginx/njs/http.js;
+&lt;span class="ln"> 5&lt;/span> server {
+&lt;span class="ln"> 6&lt;/span> listen 80;
+&lt;span class="ln"> 7&lt;/span> location / {
+&lt;span class="ln"> 8&lt;/span> js_content http.hello;
+&lt;span class="ln"> 9&lt;/span> }
+&lt;span class="ln">10&lt;/span> }
+&lt;span class="ln">11&lt;/span>}
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>njs/http.js&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-javascript" data-lang="javascript">&lt;span class="ln">1&lt;/span>&lt;span class="kd">function&lt;/span> &lt;span class="nx">hello&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">r&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">2&lt;/span> &lt;span class="nx">r&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">error&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">JSON&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">stringify&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">r&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;span class="ln">3&lt;/span> &lt;span class="nx">r&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">return&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">200&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;Hello world!&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">4&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">5&lt;/span>&lt;span class="kr">export&lt;/span> &lt;span class="k">default&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="nx">hello&lt;/span>&lt;span class="p">};&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Not getting too deep into Javascript, but basically this:&lt;/p>
+&lt;ul>
+&lt;li>Will import the njs/http.js as a module&lt;/li>
+&lt;li>Call the function http.hello every time someone calls our server on port 80 and location /&lt;/li>
+&lt;li>Will log as an error (just for sake of debugging) the content of our request in servers log&lt;/li>
+&lt;li>Will return a &lt;code>200-OK Hello world&lt;/code> to our browser&lt;/li>
+&lt;/ul>
+&lt;p>So, running this container as:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>docker run -it -p 18080:80 -v $PWD/etc/nginx.conf:/etc/nginx/nginx.conf -v $PWD/njs/:/etc/nginx/njs/ --rm nginx:stable
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>And calling it with &lt;code>curl http://127.0.0.1:18080/lalala?test=xpto&lt;/code> we get a Hello world, and the following log:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>2021/09/12 23:59:16 [error] 32#32: *1 js: {&amp;#34;status&amp;#34;:0,&amp;#34;args&amp;#34;:{&amp;#34;test&amp;#34;:&amp;#34;xpto&amp;#34;},&amp;#34;httpVersion&amp;#34;:&amp;#34;1.1&amp;#34;,&amp;#34;remoteAddress&amp;#34;:&amp;#34;172.17.0.1&amp;#34;,&amp;#34;headersOut&amp;#34;:{},&amp;#34;method&amp;#34;:&amp;#34;GET&amp;#34;,&amp;#34;uri&amp;#34;:&amp;#34;/lalala&amp;#34;,&amp;#34;headersIn&amp;#34;:{&amp;#34;Host&amp;#34;:&amp;#34;127.0.0.1:18080&amp;#34;,&amp;#34;User-Agent&amp;#34;:&amp;#34;curl/7.74.0&amp;#34;,&amp;#34;Accept&amp;#34;:&amp;#34;*/*&amp;#34;}}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Nice uh. So, by the log, we know that there is a bunch of stuff we can extract from our requests (see the Reference &lt;a href="https://nginx.org/en/docs/njs/reference.html">https://nginx.org/en/docs/njs/reference.html&lt;/a>)&lt;/p>
+&lt;h1 id="doing-some-dynamic-backend-experiments">Doing some dynamic backend experiments&lt;/h1>
+&lt;p>So now we know that we can extract Headers and URI with Javascript, which are two important parts that can help us on the routing decision.&lt;/p>
+&lt;p>Let&amp;rsquo;s then write a new Javascript that returns an upstream based on the Host information:&lt;/p>
+&lt;ul>
+&lt;li>njs/perhost.js&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-javascript" data-lang="javascript">&lt;span class="ln"> 1&lt;/span>&lt;span class="kd">function&lt;/span> &lt;span class="nx">getUpstream&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">host&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="nx">host&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">headersIn&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="s1">&amp;#39;Host&amp;#39;&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="nx">toLowerCase&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">host&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s2">&amp;#34;mydomain1.com&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="s2">&amp;#34;https://www.google.com&amp;#34;&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">host&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s2">&amp;#34;mydomain2.com&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="s2">&amp;#34;https://www.amazon.com&amp;#34;&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">return&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="mi">404&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;Backend not found&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">finish&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;span class="ln">12&lt;/span> &lt;span class="c1">// Invalid return just so it wont complain
+&lt;/span>&lt;span class="ln">13&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="s2">&amp;#34;@invalidstuff&amp;#34;&lt;/span>
+&lt;span class="ln">14&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">15&lt;/span>
+&lt;span class="ln">16&lt;/span>&lt;span class="kr">export&lt;/span> &lt;span class="k">default&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="nx">getUpstream&lt;/span>&lt;span class="p">};&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>etc/nginx.conf&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln"> 1&lt;/span>load_module modules/ngx_http_js_module.so;
+&lt;span class="ln"> 2&lt;/span>events {}
+&lt;span class="ln"> 3&lt;/span>http {
+&lt;span class="ln"> 4&lt;/span> resolver 8.8.8.8;
+&lt;span class="ln"> 5&lt;/span> js_import &amp;#34;/etc/nginx/njs/perhost.js&amp;#34;;
+&lt;span class="ln"> 6&lt;/span> js_set $upstream perhost.getUpstream;
+&lt;span class="ln"> 7&lt;/span> server {
+&lt;span class="ln"> 8&lt;/span> listen 80;
+&lt;span class="ln"> 9&lt;/span> location / {
+&lt;span class="ln">10&lt;/span> proxy_pass $upstream;
+&lt;span class="ln">11&lt;/span> }
+&lt;span class="ln">12&lt;/span> }
+&lt;span class="ln">13&lt;/span>}
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Doing some tests now, we can see that:&lt;/p>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>curl -H &amp;#34;mydomain1.com&amp;#34; http://127.0.0.1:18080 # Returns Google
+&lt;span class="ln">2&lt;/span>curl -H &amp;#34;mydomain2.com&amp;#34; http://127.0.0.1:18080 # Returns Amazon
+&lt;span class="ln">3&lt;/span>curl -H &amp;#34;somethingweird.com&amp;#34; http://127.0.0.1:18080 # Returns 404 Backend not found
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Before someone complains that I&amp;rsquo;m not checking if Host is null, this is intentional. If you call our Nginx without the host header the user will receive a 500 as the Host field does not exists and we still try to convert it to lowercase. It&amp;rsquo;s good to know that only that Javascript VM dies, but still in prod scripts this needs to be checked properly!&lt;/p>
+&lt;h1 id="going-far-and-reading-the-upstreams-config-from-somewhere-else">Going far and reading the upstreams config from somewhere else&lt;/h1>
+&lt;p>Until now we could play with NJS and have some dynamic responses based on headers. But so far, everything is still pretty &amp;ldquo;static&amp;rdquo;, as the decision making is hardcoded into our Javascript.&lt;/p>
+&lt;p>But how to do something near to the real world, with dynamic reconfigurations? In case of Ingress NGINX, Lua script is a long running program that listens on a specific port and gets configuration updates from Ingress Controller, adding the endpoints into a local map.&lt;/p>
+&lt;p>In NJS, as each script runs and dies per request it does not seem possible to store a cache/map to be used with endpoints, so what&amp;rsquo;s the easiest way? Files containing endpoints :)&lt;/p>
+&lt;p>I will not dive here into performance implications, but only on the viability of this. For this solution we want to follow the current approach of Ingress NGINX:&lt;/p>
+&lt;ul>
+&lt;li>&amp;ldquo;set&amp;rdquo; a variable called &amp;ldquo;proxy_upstream_name&amp;rdquo; containing a &amp;ldquo;namespace-servicename-port&amp;rdquo;&lt;/li>
+&lt;li>have a file in a directory called &amp;ldquo;upstreams/namespace-servicename-port&amp;rdquo; containing one upstream per line&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>www.google.com:80
+&lt;span class="ln">2&lt;/span>www.amazon.com:443
+&lt;span class="ln">3&lt;/span>192.168.0.10:9999
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>For each request, we get the variable name from the request, open the correct file (if it exists), select one random upstream.&lt;/li>
+&lt;/ul>
+&lt;p>Obs.: Ingress NGINX nowadays reloads the config if backend protocol or locations are changed. We won&amp;rsquo;t mess with this in this article, but this might be an improvement when using NJS: We can put all of the other configurations as dynamic files, and simply read from them.&lt;/p>
+&lt;p>So here is the implementation:&lt;/p>
+&lt;ul>
+&lt;li>etc/nginx.conf
+etc/nginx.conf&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln"> 1&lt;/span>load_module modules/ngx_http_js_module.so;
+&lt;span class="ln"> 2&lt;/span>events {}
+&lt;span class="ln"> 3&lt;/span>http {
+&lt;span class="ln"> 4&lt;/span> resolver 8.8.8.8;
+&lt;span class="ln"> 5&lt;/span> js_import /etc/nginx/njs/ingress.js;
+&lt;span class="ln"> 6&lt;/span> js_set $upstream ingress.getUpstream;
+&lt;span class="ln"> 7&lt;/span> server {
+&lt;span class="ln"> 8&lt;/span> listen 80;
+&lt;span class="ln"> 9&lt;/span> location / {
+&lt;span class="ln">10&lt;/span> set $ingress_service &amp;#34;default-nginx1-80&amp;#34;;
+&lt;span class="ln">11&lt;/span> proxy_pass http://$upstream;
+&lt;span class="ln">12&lt;/span> }
+&lt;span class="ln">13&lt;/span> location /otherlocation {
+&lt;span class="ln">14&lt;/span> set $ingress_service &amp;#34;rkatz-nginx2-80&amp;#34;;
+&lt;span class="ln">15&lt;/span> proxy_pass http://$upstream;
+&lt;span class="ln">16&lt;/span> }
+&lt;span class="ln">17&lt;/span> location /otherlocation1 {
+&lt;span class="ln">18&lt;/span> proxy_pass http://$upstream;
+&lt;span class="ln">19&lt;/span> }
+&lt;span class="ln">20&lt;/span> }
+&lt;span class="ln">21&lt;/span>}
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>njs/ingress.js&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-javascript" data-lang="javascript">&lt;span class="ln"> 1&lt;/span>&lt;span class="kd">function&lt;/span> &lt;span class="nx">getUpstream&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 2&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">fs&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nx">require&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s1">&amp;#39;fs&amp;#39;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="ln"> 3&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">upstreamfile&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 4&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">upstream&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 5&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">service&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 6&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;variables&amp;#34;&lt;/span> &lt;span class="k">in&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 7&lt;/span> &lt;span class="nx">service&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">variables&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">ingress_service&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln"> 8&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">service&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln"> 9&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">invalidBackend&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">404&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">10&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">11&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">12&lt;/span>
+&lt;span class="ln">13&lt;/span> &lt;span class="nx">upstreamfile&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="s2">&amp;#34;/etc/nginx/upstreams/&amp;#34;&lt;/span> &lt;span class="o">+&lt;/span> &lt;span class="nx">service&lt;/span>&lt;span class="p">;&lt;/span>
+&lt;span class="ln">14&lt;/span> &lt;span class="k">try&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">15&lt;/span> &lt;span class="nx">upstream&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nx">fs&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">readFileSync&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">upstreamfile&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;utf8&amp;#39;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">16&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">endpointArr&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nx">upstream&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">split&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="s2">&amp;#34;\n&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">17&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">endpointArr&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">length&lt;/span> &lt;span class="o">==&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">18&lt;/span> &lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">endpointArr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">]&lt;/span> &lt;span class="o">!=&lt;/span> &lt;span class="s2">&amp;#34;&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">19&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">endpointArr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="mi">0&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="nx">replace&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sr">/^\s+|\s+$/g&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;&amp;#39;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">20&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">21&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">invalidBackend&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">404&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">22&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">23&lt;/span> &lt;span class="kd">var&lt;/span> &lt;span class="nx">randomBackend&lt;/span> &lt;span class="o">=&lt;/span> &lt;span class="nb">Math&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">floor&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nb">Math&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">random&lt;/span>&lt;span class="p">()&lt;/span> &lt;span class="o">*&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">endpointArr&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">length&lt;/span> &lt;span class="o">-&lt;/span> &lt;span class="mi">1&lt;/span>&lt;span class="p">));&lt;/span>
+&lt;span class="ln">24&lt;/span> &lt;span class="c1">// The final replace is to remove some dirty line break
+&lt;/span>&lt;span class="ln">25&lt;/span>&lt;span class="c1">&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">endpointArr&lt;/span>&lt;span class="p">[&lt;/span>&lt;span class="nx">randomBackend&lt;/span>&lt;span class="p">].&lt;/span>&lt;span class="nx">replace&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="sr">/^\s+|\s+$/g&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s1">&amp;#39;&amp;#39;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">26&lt;/span>
+&lt;span class="ln">27&lt;/span> &lt;span class="p">}&lt;/span> &lt;span class="k">catch&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nx">e&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">28&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">error&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">e&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="ln">29&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">invalidBackend&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">502&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">30&lt;/span> &lt;span class="p">}&lt;/span>
+&lt;span class="ln">31&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="nx">invalidBackend&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="mi">503&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">32&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">33&lt;/span>
+&lt;span class="ln">34&lt;/span>&lt;span class="kd">function&lt;/span> &lt;span class="nx">invalidBackend&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">req&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="nx">code&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="ln">35&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="k">return&lt;/span>&lt;span class="p">(&lt;/span>&lt;span class="nx">code&lt;/span>&lt;span class="p">,&lt;/span> &lt;span class="s2">&amp;#34;Invalid Backend&amp;#34;&lt;/span>&lt;span class="p">);&lt;/span>
+&lt;span class="ln">36&lt;/span> &lt;span class="nx">req&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="nx">finish&lt;/span>&lt;span class="p">();&lt;/span>
+&lt;span class="ln">37&lt;/span> &lt;span class="k">return&lt;/span> &lt;span class="s2">&amp;#34;@invalidbackend&amp;#34;&lt;/span>
+&lt;span class="ln">38&lt;/span>&lt;span class="p">}&lt;/span>
+&lt;span class="ln">39&lt;/span>
+&lt;span class="ln">40&lt;/span>&lt;span class="kr">export&lt;/span> &lt;span class="k">default&lt;/span> &lt;span class="p">{&lt;/span>&lt;span class="nx">getUpstream&lt;/span>&lt;span class="p">};&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>This is getting more complex, but pretty easy to read: &amp;ldquo;we will use the variable &lt;code>ingress_service&lt;/code> that is set in nginx.conf, to discover what file should be read. So, if &lt;code>ingress_service=rkatz-myapp-80&lt;/code> a file with this name must exist in &lt;code>/etc/nginx/upstreams&lt;/code>.&lt;/p>
+&lt;p>And here are the upstream data:&lt;/p>
+&lt;ul>
+&lt;li>rkatz-nginx2-80&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>www.google.com
+&lt;span class="ln">2&lt;/span>www.amazon.com
+&lt;span class="ln">3&lt;/span>www.uol.com.br
+&lt;span class="ln">4&lt;/span>192.168.0.10
+&lt;/code>&lt;/pre>&lt;/div>&lt;ul>
+&lt;li>default-nginx1-80&lt;/li>
+&lt;/ul>
+&lt;div class="highlight">&lt;pre tabindex="0" class="chroma">&lt;code class="language-fallback" data-lang="fallback">&lt;span class="ln">1&lt;/span>www.rkatz.xyz
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Now calling myserver:80/ will proxy to &lt;a href="http://www.rkatz.xyz">www.rkatz.xyz&lt;/a>, while calling myserver:80/otherlocation will randomize calls between the endpoints in file &lt;code>rkatz-nginx2-80&lt;/code>.&lt;/p>
+&lt;p>If I call myserver:80/otherlocation1, I will end up with an error of &lt;code>Invalid backend&lt;/code> as no &lt;code>ingress_service&lt;/code> variable is being set for that location.&lt;/p>
+&lt;h1 id="some-conclusions">Some conclusions&lt;/h1>
+&lt;p>NJS have a lot of potential to offload some dynamic reconfiguration needs in Ingress NGINX and other services.&lt;/p>
+&lt;p>While it still have some concerns about the community, the features are pretty nice and easy to develop, using common javascript and can also be used to implement some &amp;ldquo;FaaS&amp;rdquo; on the edge, for example.&lt;/p></description></item></channel></rss>
