@@ -5,7 +5,6 @@ title = "The Katz Experiments"
 author = "Ricardo P. Katz"
 copyright = ""
 # canonifyurls = true
-paginate = 10
 theme = "hugo-clarity"
 
 DefaultContentLanguage = "en"
