@@ -14,6 +14,6 @@ I'm the author of [kubepug](https://github.com/rikatz/kubepug) and you might see
 
 You will see me around there trying to learn new stuffs always, and writing some experiences here. If you want to reach out and provide me some feedback, or ask something from anything I wrote here please please please! Feel free to direct message me.
 
-My twitter and Linkedin are here, I'm also around Kubernetes Slack as @rpkatz.
+My Bluesky and Linkedin are here, I'm also around Kubernetes Slack as @rpkatz.
 
 Hope you enjoy the content here :)

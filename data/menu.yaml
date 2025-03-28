@@ -8,7 +8,7 @@
   submenu:
     - name: LinkedIn
       link: https://www.linkedin.com/katzricardo
-    - name: Twitter
-      link: https://twitter.com/rpkatz
+    - name: Bluesky
+      link: https://bsky.app/profile/rkatz.xyz
 - name: About
   link: about/
