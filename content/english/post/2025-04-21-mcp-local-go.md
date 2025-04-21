@@ -44,6 +44,8 @@ of MCP is also the company behind Claude), I have decided to use the very cool p
 called [AnythingLLM](https://anythingllm.com/) that allows me to execute local models
 and also supports MCP.
 
+The code used on this blog post is also available at [Github](https://github.com/rikatz/weather-mcp-go)
+
 # Concepts
 Some concepts used here:
 * MCP Server - AKA Agent AI - What we are implementing here. A "server" that will be called to provide responses
