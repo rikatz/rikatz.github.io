@@ -294,7 +294,7 @@ com esse novo formato? Aquele seu FluxCD/ArgoCD que fica reaplicando coisas e n�
 se importa se o manifesto é KYAML ou não, e você quando precisar dar um get num 
 objeto que tenha um campo string com multiplas linhas :P 
 
-Fica a dica: **KYAML ainda é um YAML, ele só é mais estrito em como os manifestos serão apresentados"
+Fica a dica: **KYAML ainda é um YAML, ele só é mais estrito em como os manifestos serão apresentados"**
 
 Isso fica evidente inclusive com outras linguagens como Python, vamos ver?
 
@@ -318,10 +318,12 @@ imprime caracteres que são geralmente ocultos, tornando o manifesto mais explí
 e menos ambíguo.
 
 * Eu estou curioso pra saber o que justificou isso.
+
 Acho que eu expliquei tudo, mas o [Kubernetes Enhancement Proposal](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cli/5295-kyaml) 
 também tem boas explicações.
 
 * Vai quebrar um monte de coisa
+
 Não vai, você usa o KYAML se quiser. Eu sugiro usar nos seus pipelines, quando estiver 
 escrevendo manifestos complexos, etc. O KYAML é um YAML, ele é compatível com YAML, 
 etc (não vou me repetir mais!)
